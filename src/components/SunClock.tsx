@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CITIES, DEFAULT_CITY_INDEX } from '../config';
+import { Browser } from '@capacitor/browser';
 
 const SVG_SIZE = 800;
 const CENTER = SVG_SIZE / 2;
@@ -806,8 +807,10 @@ export default function SunClock() {
         </p>
         <a
           href="https://apps.apple.com/us/app/trilog/id6754526159"
-          target="_blank"
-          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault();
+            Browser.open({ url: 'https://apps.apple.com/us/app/trilog/id6754526159' });
+          }}
           style={{
             display: 'inline-block',
             padding: '12px 24px',
