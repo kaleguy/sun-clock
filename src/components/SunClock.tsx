@@ -521,7 +521,7 @@ export default function SunClock() {
   );
 
   const headerBlock = (
-    <div style={{ padding: isMobile ? 'calc(12px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
+    <div style={{ padding: isMobile ? 'calc(20px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
       <div style={{ display: isMobile ? 'inline-block' : undefined, textAlign: 'left' }}>
         <div
           style={{
@@ -669,7 +669,7 @@ export default function SunClock() {
         {/* Earth + moons — full width */}
         <svg
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-          style={{ width: '100%', height: 'auto', marginBottom: -24 }}
+          style={{ width: '100%', height: 'auto', marginTop: 8, marginBottom: -24 }}
         >
           {moonRing}
           {earthContent}
