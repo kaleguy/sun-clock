@@ -4,7 +4,7 @@ import { Browser } from '@capacitor/browser';
 
 const SVG_SIZE = 800;
 const CENTER = SVG_SIZE / 2;
-const ORBIT_RADIUS = 250;
+const ORBIT_RADIUS = 210;
 const DAY_CIRCLE_RADIUS = 85;
 const SUN_RADIUS = 34;
 const MOON_RING_RADIUS = 112;
@@ -331,19 +331,23 @@ function mulberry32(seed: number) {
 
 function generateStars(count: number, size: number) {
   const rng = mulberry32(42);
-  const stars: { x: number; y: number; r: number; opacity: number }[] = [];
+  const stars: { x: number; y: number; r: number; opacity: number; glow: boolean }[] = [];
   for (let i = 0; i < count; i++) {
+    const roll = rng();
+    const isBright = roll < 0.08;
+    const isMedium = roll >= 0.08 && roll < 0.25;
     stars.push({
       x: rng() * size,
       y: rng() * size,
-      r: rng() * 1.2 + 0.3,
-      opacity: rng() * 0.5 + 0.1,
+      r: isBright ? rng() * 1.5 + 1.5 : isMedium ? rng() * 0.8 + 0.8 : rng() * 0.6 + 0.2,
+      opacity: isBright ? rng() * 0.3 + 0.7 : isMedium ? rng() * 0.3 + 0.3 : rng() * 0.3 + 0.05,
+      glow: isBright,
     });
   }
   return stars;
 }
 
-const STARS = generateStars(120, SVG_SIZE);
+const STARS = generateStars(200, SVG_SIZE);
 
 // Weather icon SVG paths (based on Lucide icons, 24x24 viewBox)
 function WeatherSvgIcon({ type, x, y, size = 20 }: { type: string; x: number; y: number; size?: number }) {
@@ -424,7 +428,13 @@ export default function SunClock() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches);
   const [isSmallMobile, setIsSmallMobile] = useState(() => window.innerHeight < 750);
   const [showAbout, setShowAbout] = useState(false);
-  const [dynamicSky, setDynamicSky] = useState(() => localStorage.getItem('sunClock_dynamicSky') === 'true');
+  const [bgMode, setBgMode] = useState<'darkBlue' | 'black' | 'daylight'>(() => {
+    const saved = localStorage.getItem('sunClock_bgMode');
+    if (saved === 'black' || saved === 'daylight') return saved;
+    // Migrate old setting
+    if (localStorage.getItem('sunClock_dynamicSky') === 'true') return 'daylight';
+    return 'darkBlue';
+  });
   const [showWeather, setShowWeather] = useState(() => localStorage.getItem('sunClock_showWeather') === 'true');
   const [weatherIcon, setWeatherIcon] = useState<string | null>(null);
   const [weatherForecast, setWeatherForecast] = useState<string | null>(null);
@@ -553,9 +563,11 @@ export default function SunClock() {
   const currentMoonPhase = getMoonPhase(now);
 
   // Sky color based on time of day
-  const sky = dynamicSky
+  const sky = bgMode === 'daylight'
     ? getSkyColor(decimalHours, sunrise, sunset)
-    : { bg: 'rgb(0,0,0)', starOpacity: 1 };
+    : bgMode === 'black'
+      ? { bg: 'rgb(0,0,0)', starOpacity: 1 }
+      : { bg: 'rgb(22,22,52)', starOpacity: 1 };
 
   useEffect(() => {
     document.body.style.backgroundColor = sky.bg;
@@ -673,7 +685,7 @@ export default function SunClock() {
   );
 
   const headerBlock = (
-    <div style={{ padding: isMobile ? 'calc(20px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
+    <div style={{ padding: isMobile ? 'calc(32px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
       <div style={{ display: isMobile ? 'inline-block' : undefined, textAlign: 'left' }}>
         <div
           style={{
@@ -854,12 +866,13 @@ export default function SunClock() {
               fontSize: 14,
             }}
             onClick={() => {
-              const next = !dynamicSky;
-              setDynamicSky(next);
-              localStorage.setItem('sunClock_dynamicSky', String(next));
+              const modes: ('darkBlue' | 'black' | 'daylight')[] = ['darkBlue', 'black', 'daylight'];
+              const next = modes[(modes.indexOf(bgMode) + 1) % modes.length];
+              setBgMode(next);
+              localStorage.setItem('sunClock_bgMode', next);
             }}
           >
-            {dynamicSky ? 'Daylight' : 'Always Dark'}
+            {bgMode === 'darkBlue' ? 'Dark Blue' : bgMode === 'black' ? 'Black' : 'Daylight'}
           </div>
         </div>
         <div
@@ -946,7 +959,7 @@ export default function SunClock() {
     const earthVBy = ey - earthViewSize / 2;
 
     // Crop the orbit view to just the content area
-    const orbitPad = 95;
+    const orbitPad = 115;
     const orbitViewSize = (ORBIT_RADIUS + orbitPad) * 2;
     const orbitVBx = CENTER - ORBIT_RADIUS - orbitPad;
     const orbitVBy = CENTER - ORBIT_RADIUS - orbitPad;
@@ -960,14 +973,14 @@ export default function SunClock() {
         {/* Earth + moons — full width */}
         <svg
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '0 auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-4px auto', display: 'block' }}
         >
           {moonRing}
           {earthContent}
         </svg>
 
         {/* Info button between clocks */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 20px', margin: '-8px 0' }}>
           <div
             style={{
               width: 28,
@@ -994,10 +1007,13 @@ export default function SunClock() {
         {/* Sun view with earth icon on orbit — cropped tight */}
         <svg
           viewBox={`${orbitVBx} ${orbitVBy} ${orbitViewSize} ${orbitViewSize}`}
-          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '0 auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-4px auto', display: 'block' }}
         >
           {STARS.map((s, i) => (
-            <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(200, 210, 255, ${s.opacity * sky.starOpacity})`} />
+            <g key={i}>
+              {s.glow && <circle cx={s.x} cy={s.y} r={s.r * 3} fill={`rgba(180, 200, 255, ${s.opacity * sky.starOpacity * 0.15})`} />}
+              <circle cx={s.x} cy={s.y} r={s.r} fill={`rgba(220, 225, 255, ${s.opacity * sky.starOpacity})`} />
+            </g>
           ))}
           <circle cx={CENTER} cy={CENTER} r={ORBIT_RADIUS} fill="none" stroke={dayBlend > 0.5 ? '#888' : '#556'} strokeWidth={1.5} />
           {seasons.map((s) => (
