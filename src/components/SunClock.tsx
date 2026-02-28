@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { LATITUDE } from '../config';
+import { CITIES, DEFAULT_CITY_INDEX } from '../config';
 
 const SVG_SIZE = 800;
 const CENTER = SVG_SIZE / 2;
-const ORBIT_RADIUS = 280;
-const DAY_CIRCLE_RADIUS = 70;
-const SUN_RADIUS = 30;
-const MOON_RING_RADIUS = 95;
-const MOON_ICON_RADIUS = 5;
+const ORBIT_RADIUS = 250;
+const DAY_CIRCLE_RADIUS = 85;
+const SUN_RADIUS = 34;
+const MOON_RING_RADIUS = 112;
+const MOON_ICON_RADIUS = 8;
 const MOON_COUNT = 30;
 const SYNODIC_PERIOD = 29.53058770576;
 
@@ -31,7 +31,7 @@ function getOrbitAngle(date: Date): number {
   const daysSinceSolstice = (dayOfYear - WINTER_SOLSTICE_DAY + daysInYear) % daysInYear;
   const fraction = daysSinceSolstice / daysInYear;
 
-  const angleDeg = 90 - fraction * 360;
+  const angleDeg = 90 + fraction * 360;
   return angleDeg;
 }
 
@@ -107,14 +107,98 @@ function moonPhasePath(cx: number, cy: number, r: number, phase: number): string
   if (phase < 0.5) {
     // Waxing: right side lit
     // Right semicircle top→bottom (sweep=1), then terminator bottom→top
-    const sweepTerminator = k > 0 ? 1 : 0;
+    const sweepTerminator = k > 0 ? 0 : 1;
     return `M ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx} ${cy + r} A ${rx} ${r} 0 0 ${sweepTerminator} ${cx} ${cy - r}`;
   } else {
     // Waning: left side lit
     // Left semicircle top→bottom (sweep=0), then terminator bottom→top
-    const sweepTerminator = k > 0 ? 0 : 1;
+    const sweepTerminator = k > 0 ? 1 : 0;
     return `M ${cx} ${cy - r} A ${r} ${r} 0 0 0 ${cx} ${cy + r} A ${rx} ${r} 0 0 ${sweepTerminator} ${cx} ${cy - r}`;
   }
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function lerpColor(c1: [number, number, number], c2: [number, number, number], t: number): [number, number, number] {
+  return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+}
+
+function getSkyColor(hour: number, sunrise: number, sunset: number): { bg: string; starOpacity: number } {
+  // Key time points
+  const preDawn = sunrise - 1.5;   // first hint of light
+  const dawn = sunrise - 0.5;      // twilight brightening
+  const dayStart = sunrise + 0.75; // full daylight
+  const dayEnd = sunset - 0.75;    // start of evening
+  const dusk = sunset + 0.5;       // twilight darkening
+  const postDusk = sunset + 1.5;   // full night
+
+  const black: [number, number, number] = [0, 0, 0];
+  const deepNavy: [number, number, number] = [8, 12, 30];
+  const twilight: [number, number, number] = [25, 40, 80];
+  const dawn_blue: [number, number, number] = [90, 130, 180];
+  const daylight: [number, number, number] = [210, 220, 235];
+
+  let rgb: [number, number, number];
+  let starOpacity: number;
+
+  if (hour < preDawn) {
+    // Deep night
+    rgb = black;
+    starOpacity = 1;
+  } else if (hour < dawn) {
+    // Pre-dawn: black → deep navy
+    const t = (hour - preDawn) / (dawn - preDawn);
+    rgb = lerpColor(black, deepNavy, t);
+    starOpacity = lerp(1, 0.6, t);
+  } else if (hour < sunrise) {
+    // Dawn twilight: deep navy → twilight blue
+    const t = (hour - dawn) / (sunrise - dawn);
+    rgb = lerpColor(deepNavy, twilight, t);
+    starOpacity = lerp(0.6, 0.2, t);
+  } else if (hour < dayStart) {
+    // Sunrise → daylight: twilight → dawn blue → daylight
+    const t = (hour - sunrise) / (dayStart - sunrise);
+    if (t < 0.5) {
+      rgb = lerpColor(twilight, dawn_blue, t * 2);
+    } else {
+      rgb = lerpColor(dawn_blue, daylight, (t - 0.5) * 2);
+    }
+    starOpacity = lerp(0.2, 0, t);
+  } else if (hour < dayEnd) {
+    // Full daylight
+    rgb = daylight;
+    starOpacity = 0;
+  } else if (hour < sunset) {
+    // Pre-sunset: daylight → dawn blue
+    const t = (hour - dayEnd) / (sunset - dayEnd);
+    rgb = lerpColor(daylight, dawn_blue, t);
+    starOpacity = 0;
+  } else if (hour < dusk) {
+    // Sunset → dusk: dawn blue → twilight → deep navy
+    const t = (hour - sunset) / (dusk - sunset);
+    if (t < 0.5) {
+      rgb = lerpColor(dawn_blue, twilight, t * 2);
+    } else {
+      rgb = lerpColor(twilight, deepNavy, (t - 0.5) * 2);
+    }
+    starOpacity = lerp(0, 0.6, t);
+  } else if (hour < postDusk) {
+    // Post-dusk: deep navy → black
+    const t = (hour - dusk) / (postDusk - dusk);
+    rgb = lerpColor(deepNavy, black, t);
+    starOpacity = lerp(0.6, 1, t);
+  } else {
+    // Deep night
+    rgb = black;
+    starOpacity = 1;
+  }
+
+  return {
+    bg: `rgb(${Math.round(rgb[0])},${Math.round(rgb[1])},${Math.round(rgb[2])})`,
+    starOpacity,
+  };
 }
 
 // Simple seeded random for stable star positions
@@ -143,9 +227,35 @@ function generateStars(count: number, size: number) {
 
 const STARS = generateStars(120, SVG_SIZE);
 
+const MOBILE_BREAKPOINT = 600;
+
 export default function SunClock() {
   const rafRef = useRef<number>(0);
   const [now, setNow] = useState(() => new Date());
+  const [cityIndex, setCityIndex] = useState(DEFAULT_CITY_INDEX);
+  const [showCityPicker, setShowCityPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+    const handler = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const city = CITIES[cityIndex];
+
+  useEffect(() => {
+    if (!showCityPicker) return;
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowCityPicker(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showCityPicker]);
 
   useEffect(() => {
     function tick() {
@@ -156,15 +266,16 @@ export default function SunClock() {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // Orbit position
-  const orbitAngle = getOrbitAngle(now);
+  // Orbit position — flip for Southern Hemisphere so local season matches
+  const baseOrbitAngle = getOrbitAngle(now);
+  const orbitAngle = city.latitude < 0 ? baseOrbitAngle + 180 : baseOrbitAngle;
   const earthPos = polarToCartesian(CENTER, CENTER, ORBIT_RADIUS, orbitAngle);
   const ex = earthPos.x;
   const ey = earthPos.y;
 
   // Sunrise/sunset for YES Watch dial
   const dayOfYear = getDayOfYear(now);
-  const { sunrise, sunset } = getSunTimes(dayOfYear, LATITUDE);
+  const { sunrise, sunset } = getSunTimes(dayOfYear, city.latitude);
   const sunriseAngle = hourToAngle(sunrise);
   const sunsetAngle = hourToAngle(sunset);
 
@@ -175,25 +286,33 @@ export default function SunClock() {
   const millis = now.getMilliseconds();
   const decimalHours = hours + minutes / 60 + seconds / 3600 + millis / 3600000;
   const handAngle = hourToAngle(decimalHours);
-  const handTip = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 6, handAngle);
-  const handTail = polarToCartesian(ex, ey, -14, handAngle);
+  const handTip = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 8, handAngle);
+  const handTail = polarToCartesian(ex, ey, -18, handAngle);
 
   // Second hand
   const decimalSeconds = seconds + millis / 1000;
   const secondAngle = (decimalSeconds / 60) * 360 - 90;
-  const secondTip = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 8, secondAngle);
-  const secondTail = polarToCartesian(ex, ey, -10, secondAngle);
+  const secondTip = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 10, secondAngle);
+  const secondTail = polarToCartesian(ex, ey, -12, secondAngle);
 
   // Moon phase
   const currentMoonPhase = getMoonPhase(now);
 
-  // Season labels
-  const labelOffset = 32;
+  // Sky color based on time of day
+  const sky = getSkyColor(decimalHours, sunrise, sunset);
+
+  useEffect(() => {
+    document.body.style.backgroundColor = sky.bg;
+  }, [sky.bg]);
+
+  // Season labels — flip names for Southern Hemisphere
+  const isSouthern = city.latitude < 0;
+  const labelOffset = 24;
   const seasons = [
-    { label: 'Winter', date: 'Dec 21', x: CENTER, y: CENTER + ORBIT_RADIUS + labelOffset, anchor: 'middle' as const, dy: 16 },
-    { label: 'Summer', date: 'Jun 21', x: CENTER, y: CENTER - ORBIT_RADIUS - labelOffset + 10, anchor: 'middle' as const, dy: -12 },
-    { label: 'Spring', date: 'Mar 20', x: CENTER + ORBIT_RADIUS + labelOffset, y: CENTER + 5, anchor: 'start' as const, dy: 16 },
-    { label: 'Autumn', date: 'Sep 22', x: CENTER - ORBIT_RADIUS - labelOffset, y: CENTER + 5, anchor: 'end' as const, dy: 16 },
+    { label: isSouthern ? 'Summer' : 'Winter', date: 'Dec 21', x: CENTER, y: CENTER + ORBIT_RADIUS + labelOffset, anchor: 'middle' as const, dy: 22 },
+    { label: isSouthern ? 'Winter' : 'Summer', date: 'Jun 21', x: CENTER, y: CENTER - ORBIT_RADIUS - labelOffset + 4, anchor: 'middle' as const, dy: -18 },
+    { label: isSouthern ? 'Spring' : 'Autumn', date: 'Sep 22', x: CENTER + ORBIT_RADIUS + labelOffset, y: CENTER + 8, anchor: 'start' as const, dy: 22 },
+    { label: isSouthern ? 'Autumn' : 'Spring', date: 'Mar 20', x: CENTER - ORBIT_RADIUS - labelOffset, y: CENTER + 8, anchor: 'end' as const, dy: 22 },
   ];
 
   // Arc paths for day and night wedges
@@ -204,160 +323,198 @@ export default function SunClock() {
   const noonAngle = hourToAngle(12);
   const midnightAngle = hourToAngle(0);
   const noonOuter = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 2, noonAngle);
-  const noonInner = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 10, noonAngle);
+  const noonInner = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 14, noonAngle);
   const midnightOuter = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 2, midnightAngle);
-  const midnightInner = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 10, midnightAngle);
+  const midnightInner = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 14, midnightAngle);
 
-  return (
-    <svg
-      viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
-      style={{ width: '100%', maxWidth: SVG_SIZE, height: 'auto' }}
-    >
-      {/* Stars */}
-      {STARS.map((s, i) => (
-        <circle
-          key={i}
-          cx={s.x}
-          cy={s.y}
-          r={s.r}
-          fill={`rgba(200, 210, 255, ${s.opacity})`}
-        />
-      ))}
+  // Shared SVG content pieces
+  const dayBlend = 1 - sky.starOpacity;
 
-      {/* Orbit circle */}
-      <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={ORBIT_RADIUS}
-        fill="none"
-        stroke="#334"
-        strokeWidth={1.5}
-      />
+  const moonRing = Array.from({ length: MOON_COUNT }, (_, i) => {
+    const phaseForDay = (currentMoonPhase + i / SYNODIC_PERIOD) % 1;
+    const angle = -90 - (i / MOON_COUNT) * 360;
+    const pos = polarToCartesian(ex, ey, MOON_RING_RADIUS, angle);
+    const isCurrent = i === 0;
+    const opacity = isCurrent ? 1 : 0.25;
+    const litPath = moonPhasePath(pos.x, pos.y, MOON_ICON_RADIUS, phaseForDay);
+    const strokeColor = isCurrent
+      ? `rgba(${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(0.4, 0.5, dayBlend)})`
+      : `rgba(${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(0.08, 0.3, dayBlend)})`;
+    return (
+      <g key={i} opacity={opacity}>
+        <circle cx={pos.x} cy={pos.y} r={MOON_ICON_RADIUS} fill="#1a1a2e" stroke={strokeColor} strokeWidth={isCurrent ? 0.6 : lerp(0.3, 0.5, dayBlend)} />
+        {litPath === 'full' ? (
+          <circle cx={pos.x} cy={pos.y} r={MOON_ICON_RADIUS} fill={isCurrent ? '#e8e0c8' : '#c8c0a8'} />
+        ) : litPath ? (
+          <path d={litPath} fill={isCurrent ? '#e8e0c8' : '#c8c0a8'} />
+        ) : null}
+      </g>
+    );
+  });
 
-      {/* Season labels */}
-      {seasons.map((s) => (
-        <g key={s.label}>
-          <text
-            x={s.x}
-            y={s.y}
-            fill="#667"
-            fontSize={14}
-            fontFamily="system-ui, sans-serif"
-            textAnchor={s.anchor}
-          >
-            {s.label}
-          </text>
-          <text
-            x={s.x}
-            y={s.y + s.dy}
-            fill="#445"
-            fontSize={11}
-            fontFamily="system-ui, sans-serif"
-            textAnchor={s.anchor}
-          >
-            {s.date}
-          </text>
-        </g>
-      ))}
-
-      {/* Sun */}
-      <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
-      <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
-
-      {/* Moon ring — 30 phases around Earth */}
-      {Array.from({ length: MOON_COUNT }, (_, i) => {
-        // Phase for this position: current + i days
-        const phaseForDay = (currentMoonPhase + i / SYNODIC_PERIOD) % 1;
-
-        // Position: index 0 at top (-90°), counter-clockwise (matching lunar orbit)
-        const angle = -90 - (i / MOON_COUNT) * 360;
-        const pos = polarToCartesian(ex, ey, MOON_RING_RADIUS, angle);
-
-        // Current moon (i=0) is bright, others dim
-        const isCurrent = i === 0;
-        const opacity = isCurrent ? 1 : 0.25;
-
-        const litPath = moonPhasePath(pos.x, pos.y, MOON_ICON_RADIUS, phaseForDay);
-
-        return (
-          <g key={i} opacity={opacity}>
-            {/* Dark base circle */}
-            <circle
-              cx={pos.x}
-              cy={pos.y}
-              r={MOON_ICON_RADIUS}
-              fill="#1a1a2e"
-              stroke={isCurrent ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.08)'}
-              strokeWidth={isCurrent ? 0.6 : 0.3}
-            />
-            {/* Lit portion */}
-            {litPath === 'full' ? (
-              <circle cx={pos.x} cy={pos.y} r={MOON_ICON_RADIUS} fill={isCurrent ? '#e8e0c8' : '#c8c0a8'} />
-            ) : litPath ? (
-              <path d={litPath} fill={isCurrent ? '#e8e0c8' : '#c8c0a8'} />
-            ) : null}
-          </g>
-        );
-      })}
-
-      {/* Earth day circle — YES Watch style */}
+  const earthContent = (
+    <>
       <defs>
         <clipPath id="earth-clip">
           <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} />
         </clipPath>
       </defs>
-
-      {/* Night background (full circle) */}
       <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="#0a0e1a" />
-
-      {/* Day wedge */}
       <path d={dayPath} fill="#2a4a6b" clipPath="url(#earth-clip)" />
-
-      {/* Night wedge */}
       <path d={nightPath} fill="#0d1528" clipPath="url(#earth-clip)" />
-
-      {/* Circle border */}
       <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="none" stroke="#4a9eff" strokeWidth={1.5} />
-
-      {/* Noon tick */}
-      <line
-        x1={noonOuter.x} y1={noonOuter.y}
-        x2={noonInner.x} y2={noonInner.y}
-        stroke="rgba(255, 255, 255, 0.3)"
-        strokeWidth={1}
-      />
-
-      {/* Midnight tick */}
-      <line
-        x1={midnightOuter.x} y1={midnightOuter.y}
-        x2={midnightInner.x} y2={midnightInner.y}
-        stroke="rgba(255, 255, 255, 0.15)"
-        strokeWidth={1}
-      />
-
-      {/* Second hand */}
-      <line
-        x1={secondTail.x} y1={secondTail.y}
-        x2={secondTip.x} y2={secondTip.y}
-        stroke="rgba(255, 255, 255, 0.12)"
-        strokeWidth={0.75}
-        strokeLinecap="round"
-      />
-
-      {/* 24-hour hand — tapered shape */}
+      <line x1={noonOuter.x} y1={noonOuter.y} x2={noonInner.x} y2={noonInner.y} stroke="rgba(255, 255, 255, 0.3)" strokeWidth={1} />
+      <line x1={midnightOuter.x} y1={midnightOuter.y} x2={midnightInner.x} y2={midnightInner.y} stroke="rgba(255, 255, 255, 0.15)" strokeWidth={1} />
+      <line x1={secondTail.x} y1={secondTail.y} x2={secondTip.x} y2={secondTip.y} stroke="rgba(255, 255, 255, 0.12)" strokeWidth={0.75} strokeLinecap="round" />
       <polygon
-        points={`
-          ${handTip.x},${handTip.y}
-          ${ex + 3 * Math.cos((handAngle + 90) * Math.PI / 180)},${ey + 3 * Math.sin((handAngle + 90) * Math.PI / 180)}
-          ${handTail.x},${handTail.y}
-          ${ex + 3 * Math.cos((handAngle - 90) * Math.PI / 180)},${ey + 3 * Math.sin((handAngle - 90) * Math.PI / 180)}
-        `}
+        points={`${handTip.x},${handTip.y} ${ex + 4 * Math.cos((handAngle + 90) * Math.PI / 180)},${ey + 4 * Math.sin((handAngle + 90) * Math.PI / 180)} ${handTail.x},${handTail.y} ${ex + 4 * Math.cos((handAngle - 90) * Math.PI / 180)},${ey + 4 * Math.sin((handAngle - 90) * Math.PI / 180)}`}
         fill="rgba(255, 140, 100, 0.85)"
       />
+      <circle cx={ex} cy={ey} r={6} fill="#4a9eff" />
+      <circle cx={ex} cy={ey} r={3} fill="#0d1528" />
+    </>
+  );
 
-      {/* Center dot */}
-      <circle cx={ex} cy={ey} r={5} fill="#4a9eff" />
-      <circle cx={ex} cy={ey} r={2.5} fill="#0d1528" />
+  const cityPicker = showCityPicker && (
+    <div
+      ref={pickerRef}
+      style={{
+        position: 'absolute',
+        top: 30,
+        left: 16,
+        maxHeight: '50%',
+        overflowY: 'auto',
+        background: 'rgba(10, 14, 26, 0.95)',
+        border: '1px solid rgba(255,255,255,0.12)',
+        borderRadius: 8,
+        padding: '4px 0',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: 16,
+        fontWeight: 300,
+        zIndex: 10,
+      }}
+    >
+      {CITIES.map((c, i) => (
+        <div
+          key={c.name}
+          onClick={() => { setCityIndex(i); setShowCityPicker(false); }}
+          style={{
+            padding: '10px 20px',
+            color: i === cityIndex ? '#4a9eff' : 'rgba(255,255,255,0.5)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          {c.name}
+        </div>
+      ))}
+    </div>
+  );
+
+  const headerBlock = (
+    <div style={{ padding: isMobile ? '40px 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
+      <div style={{ display: isMobile ? 'inline-block' : undefined, textAlign: 'left' }}>
+        <div
+          style={{
+            color: 'rgba(255,255,255,0.3)',
+            fontSize: isMobile ? 24 : 20,
+            fontWeight: 100,
+            cursor: 'pointer',
+          }}
+          onClick={() => setShowCityPicker(!showCityPicker)}
+        >
+          {city.name} &#9662;
+        </div>
+        <div
+          style={{
+            color: 'rgba(255,255,255,0.18)',
+            fontSize: isMobile ? 42 : 36,
+            fontWeight: 100,
+            lineHeight: 1.1,
+          }}
+        >
+          {now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- Mobile layout: stacked vertically ---
+  if (isMobile) {
+    const pad = 10;
+    const earthViewSize = (MOON_RING_RADIUS + MOON_ICON_RADIUS + pad) * 2;
+    const earthVBx = ex - earthViewSize / 2;
+    const earthVBy = ey - earthViewSize / 2;
+
+    return (
+      <div style={{ position: 'relative', width: '100%' }}>
+        {headerBlock}
+
+        {/* Earth + moons — full width */}
+        <svg
+          viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
+          style={{ width: '100%', height: 'auto' }}
+        >
+          {moonRing}
+          {earthContent}
+        </svg>
+
+        {/* Sun view with earth icon on orbit */}
+        <svg
+          viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
+          style={{ width: '100%', height: 'auto' }}
+        >
+          {STARS.map((s, i) => (
+            <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(200, 210, 255, ${s.opacity * sky.starOpacity})`} />
+          ))}
+          <circle cx={CENTER} cy={CENTER} r={ORBIT_RADIUS} fill="none" stroke="#334" strokeWidth={1.5} />
+          {seasons.map((s) => (
+            <g key={s.label}>
+              <text x={s.x} y={s.y} fill="#667" fontSize={24} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.label}</text>
+              <text x={s.x} y={s.y + s.dy} fill="#445" fontSize={16} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.date}</text>
+            </g>
+          ))}
+          <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
+          <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
+          {/* Earth icon */}
+          <circle cx={ex} cy={ey} r={18} fill="#1a5276" />
+          <circle cx={ex} cy={ey} r={18} fill="none" stroke="#4a9eff" strokeWidth={1.5} />
+          <ellipse cx={ex} cy={ey} rx={7} ry={16} fill="none" stroke="#2e7d32" strokeWidth={1.5} transform={`rotate(-20 ${ex} ${ey})`} />
+          <ellipse cx={ex + 5} cy={ey - 4} rx={8} ry={5} fill="#2e7d32" opacity={0.6} />
+          <ellipse cx={ex - 6} cy={ey + 6} rx={6} ry={4} fill="#2e7d32" opacity={0.5} />
+        </svg>
+
+        {cityPicker}
+      </div>
+    );
+  }
+
+  // --- Desktop layout: single SVG ---
+  return (
+    <div style={{ position: 'relative', width: '100%', maxWidth: SVG_SIZE }}>
+    {headerBlock}
+    <svg
+      viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
+      style={{ width: '100%', height: 'auto' }}
+    >
+      {STARS.map((s, i) => (
+        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(200, 210, 255, ${s.opacity * sky.starOpacity})`} />
+      ))}
+      <circle cx={CENTER} cy={CENTER} r={ORBIT_RADIUS} fill="none" stroke="#334" strokeWidth={1.5} />
+      {seasons.map((s) => (
+        <g key={s.label}>
+          <text x={s.x} y={s.y} fill="#667" fontSize={24} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.label}</text>
+          <text x={s.x} y={s.y + s.dy} fill="#445" fontSize={16} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.date}</text>
+        </g>
+      ))}
+      <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
+      <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
+      {moonRing}
+      {earthContent}
     </svg>
+    {cityPicker}
+    </div>
   );
 }
