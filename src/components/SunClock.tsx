@@ -230,11 +230,13 @@ function lerpColor(c1: [number, number, number], c2: [number, number, number], t
   return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
 }
 
-function getSkyColor(hour: number, sunrise: number, sunset: number): { bg: string; starOpacity: number } {
+function getSkyColor(hour: number, sunrise: number, sunset: number, daylightColor: [number, number, number] = [240, 242, 245]): { bg: string; starOpacity: number } {
   // Key time points
   const preDawn = sunrise - 1.5;   // first hint of light
   const dawn = sunrise - 0.5;      // twilight brightening
-  const dayStart = sunrise + 0.75; // full daylight
+  const dayStart = sunrise + 0.75; // initial daylight
+  const dayFull = sunrise + 2.75;  // full white
+  const dayEndFull = sunset - 2.75; // start fading from white
   const dayEnd = sunset - 0.75;    // start of evening
   const dusk = sunset + 0.5;       // twilight darkening
   const postDusk = sunset + 1.5;   // full night
@@ -243,7 +245,7 @@ function getSkyColor(hour: number, sunrise: number, sunset: number): { bg: strin
   const deepNavy: [number, number, number] = [8, 12, 30];
   const twilight: [number, number, number] = [25, 40, 80];
   const dawn_blue: [number, number, number] = [90, 130, 180];
-  const daylight: [number, number, number] = [210, 220, 235];
+  const daylight = daylightColor;
 
   let rgb: [number, number, number];
   let starOpacity: number;
@@ -271,9 +273,19 @@ function getSkyColor(hour: number, sunrise: number, sunset: number): { bg: strin
       rgb = lerpColor(dawn_blue, daylight, (t - 0.5) * 2);
     }
     starOpacity = lerp(0.2, 0, t);
+  } else if (hour < dayFull) {
+    // Early day: daylight blue → white
+    const t = (hour - dayStart) / (dayFull - dayStart);
+    rgb = lerpColor(daylight, [255, 255, 255], t);
+    starOpacity = 0;
+  } else if (hour < dayEndFull) {
+    // Full white daylight
+    rgb = [255, 255, 255];
+    starOpacity = 0;
   } else if (hour < dayEnd) {
-    // Full daylight
-    rgb = daylight;
+    // Late day: white → daylight blue
+    const t = (hour - dayEndFull) / (dayEnd - dayEndFull);
+    rgb = lerpColor([255, 255, 255], daylight, t);
     starOpacity = 0;
   } else if (hour < sunset) {
     // Pre-sunset: daylight → dawn blue
@@ -332,6 +344,74 @@ function generateStars(count: number, size: number) {
 
 const STARS = generateStars(120, SVG_SIZE);
 
+// Weather icon SVG paths (based on Lucide icons, 24x24 viewBox)
+function WeatherSvgIcon({ type, x, y, size = 20 }: { type: string; x: number; y: number; size?: number }) {
+  const s = size / 24; // scale factor
+  const col = 'rgba(0,0,0,0.55)';
+  return (
+    <g transform={`translate(${x - size / 2}, ${y - size / 2}) scale(${s})`} fill="none" stroke={col} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      {type === 'sunny' && (
+        <>
+          <circle cx={12} cy={12} r={4} />
+          <line x1={12} y1={2} x2={12} y2={4} />
+          <line x1={12} y1={20} x2={12} y2={22} />
+          <line x1={4.93} y1={4.93} x2={6.34} y2={6.34} />
+          <line x1={17.66} y1={17.66} x2={19.07} y2={19.07} />
+          <line x1={2} y1={12} x2={4} y2={12} />
+          <line x1={20} y1={12} x2={22} y2={12} />
+          <line x1={4.93} y1={19.07} x2={6.34} y2={17.66} />
+          <line x1={17.66} y1={6.34} x2={19.07} y2={4.93} />
+        </>
+      )}
+      {type === 'partlyCloudy' && (
+        <>
+          <path d="M12 2v2" />
+          <path d="M4.93 4.93l1.41 1.41" />
+          <path d="M20 12h2" />
+          <path d="M19.07 4.93l-1.41 1.41" />
+          <path d="M15.95 5.63a5 5 0 0 0-7.9 4.24" />
+          <path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z" />
+        </>
+      )}
+      {type === 'cloudy' && (
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z" />
+      )}
+      {type === 'rain' && (
+        <>
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+          <path d="M16 14v6" />
+          <path d="M8 14v6" />
+          <path d="M12 16v6" />
+        </>
+      )}
+      {type === 'snow' && (
+        <>
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+          <path d="M8 15h.01" />
+          <path d="M8 19h.01" />
+          <path d="M12 17h.01" />
+          <path d="M12 21h.01" />
+          <path d="M16 15h.01" />
+          <path d="M16 19h.01" />
+        </>
+      )}
+      {type === 'storm' && (
+        <>
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+          <path d="M13 12l-3 5h4l-3 5" />
+        </>
+      )}
+      {type === 'fog' && (
+        <>
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+          <path d="M16 17H7" />
+          <path d="M17 21H9" />
+        </>
+      )}
+    </g>
+  );
+}
+
 const MOBILE_BREAKPOINT = 600;
 
 export default function SunClock() {
@@ -342,6 +422,11 @@ export default function SunClock() {
   const pickerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches);
   const [showAbout, setShowAbout] = useState(false);
+  const [dynamicSky, setDynamicSky] = useState(() => localStorage.getItem('sunClock_dynamicSky') === 'true');
+  const [showWeather, setShowWeather] = useState(() => localStorage.getItem('sunClock_showWeather') === 'true');
+  const [weatherIcon, setWeatherIcon] = useState<string | null>(null);
+  const [weatherForecast, setWeatherForecast] = useState<string | null>(null);
+  const [showWeatherModal, setShowWeatherModal] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
@@ -371,6 +456,59 @@ export default function SunClock() {
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
+
+  // Fetch weather from NOAA (US locations only)
+  useEffect(() => {
+    setWeatherIcon(null);
+    setWeatherForecast(null);
+    if (!showWeather) return;
+    let cancelled = false;
+
+    async function fetchWeather() {
+      try {
+        const ptRes = await fetch(
+          `https://api.weather.gov/points/${city.latitude.toFixed(4)},${city.longitude.toFixed(4)}`,
+          { headers: { 'User-Agent': 'SunClock/1.0' } }
+        );
+        if (!ptRes.ok) return; // Not a US location
+        const ptData = await ptRes.json();
+        const forecastUrl = ptData.properties?.forecast;
+        if (!forecastUrl) return;
+
+        const fcRes = await fetch(forecastUrl, { headers: { 'User-Agent': 'SunClock/1.0' } });
+        if (!fcRes.ok) return;
+        const fcData = await fcRes.json();
+        const periods = fcData.properties?.periods;
+        if (!periods?.length || cancelled) return;
+
+        const today = periods[0];
+        const short: string = today.shortForecast.toLowerCase();
+        let icon = '';
+        if (short.includes('thunder') || short.includes('storm')) icon = 'storm';
+        else if (short.includes('rain') || short.includes('shower') || short.includes('drizzle')) icon = 'rain';
+        else if (short.includes('snow') || short.includes('blizzard') || short.includes('flurr')) icon = 'snow';
+        else if (short.includes('fog') || short.includes('mist') || short.includes('haze')) icon = 'fog';
+        else if (short.includes('partly') || short.includes('mostly sunny')) icon = 'partlyCloudy';
+        else if (short.includes('cloud') || short.includes('overcast') || short.includes('mostly cloudy')) icon = 'cloudy';
+        else if (short.includes('sunny') || short.includes('clear')) icon = 'sunny';
+        else icon = 'cloudy';
+
+        if (!cancelled) {
+          setWeatherIcon(icon);
+          // Build full forecast text from first few periods
+          const report = periods.slice(0, 6).map((p: { name: string; temperature: number; temperatureUnit: string; shortForecast: string; windSpeed: string; windDirection: string }) =>
+            `${p.name}: ${p.temperature}°${p.temperatureUnit} — ${p.shortForecast}. Wind ${p.windSpeed} ${p.windDirection}`
+          ).join('\n\n');
+          setWeatherForecast(report);
+        }
+      } catch {
+        // Silently fail for non-US locations or network issues
+      }
+    }
+
+    fetchWeather();
+    return () => { cancelled = true; };
+  }, [city.latitude, city.longitude, showWeather]);
 
   // Orbit position — flip for Southern Hemisphere so local season matches
   const baseOrbitAngle = getOrbitAngle(now);
@@ -406,7 +544,9 @@ export default function SunClock() {
   const currentMoonPhase = getMoonPhase(now);
 
   // Sky color based on time of day
-  const sky = getSkyColor(decimalHours, sunrise, sunset);
+  const sky = dynamicSky
+    ? getSkyColor(decimalHours, sunrise, sunset)
+    : { bg: 'rgb(0,0,0)', starOpacity: 1 };
 
   useEffect(() => {
     document.body.style.backgroundColor = sky.bg;
@@ -425,14 +565,6 @@ export default function SunClock() {
   // Arc paths for day and night wedges
   const dayPath = describeArc(ex, ey, DAY_CIRCLE_RADIUS, sunriseAngle, sunsetAngle);
   const nightPath = describeArc(ex, ey, DAY_CIRCLE_RADIUS, sunsetAngle, sunriseAngle);
-
-  // Noon/midnight tick marks
-  const noonAngle = hourToAngle(12);
-  const midnightAngle = hourToAngle(0);
-  const noonOuter = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 2, noonAngle);
-  const noonInner = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 14, noonAngle);
-  const midnightOuter = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 2, midnightAngle);
-  const midnightInner = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS - 14, midnightAngle);
 
   // Shared SVG content pieces
   const dayBlend = 1 - sky.starOpacity;
@@ -465,13 +597,24 @@ export default function SunClock() {
         <clipPath id="earth-clip">
           <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} />
         </clipPath>
+        <filter id="day-blur">
+          <feGaussianBlur stdDeviation="4" />
+        </filter>
       </defs>
       <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="#0a0e1a" />
-      <path d={dayPath} fill="#2a4a6b" clipPath="url(#earth-clip)" />
+      <path d={dayPath} fill="#e8c84a" clipPath="url(#earth-clip)" filter="url(#day-blur)" />
       <path d={nightPath} fill="#0d1528" clipPath="url(#earth-clip)" />
       <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="none" stroke="#4a9eff" strokeWidth={1.5} />
-      <line x1={noonOuter.x} y1={noonOuter.y} x2={noonInner.x} y2={noonInner.y} stroke="rgba(255, 255, 255, 0.3)" strokeWidth={1} />
-      <line x1={midnightOuter.x} y1={midnightOuter.y} x2={midnightInner.x} y2={midnightInner.y} stroke="rgba(255, 255, 255, 0.15)" strokeWidth={1} />
+      {weatherIcon && (() => {
+        const noonAngle = hourToAngle(12);
+        const iconPos = polarToCartesian(ex, ey, DAY_CIRCLE_RADIUS * 0.5, noonAngle);
+        return (
+          <g style={{ cursor: 'pointer' }} onClick={() => setShowWeatherModal(true)}>
+            <circle cx={iconPos.x} cy={iconPos.y} r={16} fill="transparent" />
+            <WeatherSvgIcon type={weatherIcon} x={iconPos.x} y={iconPos.y} size={24} />
+          </g>
+        );
+      })()}
       <line x1={secondTail.x} y1={secondTail.y} x2={secondTip.x} y2={secondTip.y} stroke="rgba(255, 255, 255, 0.12)" strokeWidth={0.75} strokeLinecap="round" />
       <polygon
         points={`${handTip.x},${handTip.y} ${ex + 4 * Math.cos((handAngle + 90) * Math.PI / 180)},${ey + 4 * Math.sin((handAngle + 90) * Math.PI / 180)} ${handTail.x},${handTail.y} ${ex + 4 * Math.cos((handAngle - 90) * Math.PI / 180)},${ey + 4 * Math.sin((handAngle - 90) * Math.PI / 180)}`}
@@ -525,7 +668,7 @@ export default function SunClock() {
       <div style={{ display: isMobile ? 'inline-block' : undefined, textAlign: 'left' }}>
         <div
           style={{
-            color: 'rgba(255,255,255,0.3)',
+            color: dayBlend > 0.5 ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)',
             fontSize: isMobile ? 24 : 20,
             fontWeight: 100,
             cursor: 'pointer',
@@ -536,13 +679,77 @@ export default function SunClock() {
         </div>
         <div
           style={{
-            color: 'rgba(255,255,255,0.18)',
+            color: dayBlend > 0.5 ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.35)',
             fontSize: isMobile ? 42 : 36,
             fontWeight: 100,
             lineHeight: 1.1,
+            marginBottom: isMobile ? 14 : 0,
           }}
         >
           {now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        </div>
+      </div>
+    </div>
+  );
+
+  const weatherModal = showWeatherModal && weatherForecast && (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0,0,0,0.92)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+      onClick={() => setShowWeatherModal(false)}
+    >
+      <div
+        style={{
+          maxWidth: 400,
+          color: 'rgba(255,255,255,0.7)',
+          fontFamily: 'system-ui, sans-serif',
+          fontWeight: 300,
+          fontSize: 14,
+          lineHeight: 1.6,
+          textAlign: 'left',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 22, fontWeight: 100, color: 'rgba(255,255,255,0.4)', marginBottom: 20, textAlign: 'center' }}>
+          {city.name} Forecast
+        </div>
+        {weatherForecast.split('\n\n').map((period, i) => (
+          <div key={i} style={{ marginBottom: 12, color: 'rgba(255,255,255,0.6)' }}>
+            {period}
+          </div>
+        ))}
+        <div
+          style={{
+            marginTop: 24,
+            color: 'rgba(255,255,255,0.25)',
+            fontSize: 12,
+            textAlign: 'center',
+          }}
+        >
+          Source: NOAA/NWS
+        </div>
+        <div
+          style={{
+            marginTop: 12,
+            color: 'rgba(255,255,255,0.25)',
+            fontSize: 13,
+            cursor: 'pointer',
+            textAlign: 'center',
+          }}
+          onClick={() => setShowWeatherModal(false)}
+        >
+          tap to close
         </div>
       </div>
     </div>
@@ -616,7 +823,70 @@ export default function SunClock() {
         </a>
         <div
           style={{
-            marginTop: 32,
+            marginTop: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            fontSize: 14,
+            color: 'rgba(255,255,255,0.4)',
+          }}
+        >
+          <span>Background:</span>
+          <div
+            style={{
+              padding: '6px 16px',
+              borderRadius: 6,
+              border: '1px solid rgba(255,255,255,0.2)',
+              cursor: 'pointer',
+              color: 'rgba(255,255,255,0.6)',
+              fontSize: 14,
+            }}
+            onClick={() => {
+              const next = !dynamicSky;
+              setDynamicSky(next);
+              localStorage.setItem('sunClock_dynamicSky', String(next));
+            }}
+          >
+            {dynamicSky ? 'Daylight' : 'Always Dark'}
+          </div>
+        </div>
+        <div
+          style={{
+            marginTop: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            fontSize: 14,
+            color: 'rgba(255,255,255,0.4)',
+          }}
+        >
+          <span>Weather:</span>
+          <div
+            style={{
+              padding: '6px 16px',
+              borderRadius: 6,
+              border: '1px solid rgba(255,255,255,0.2)',
+              cursor: 'pointer',
+              color: 'rgba(255,255,255,0.6)',
+              fontSize: 14,
+            }}
+            onClick={() => {
+              const next = !showWeather;
+              setShowWeather(next);
+              localStorage.setItem('sunClock_showWeather', String(next));
+            }}
+          >
+            {showWeather ? 'On' : 'Off'}
+          </div>
+        </div>
+        <div style={{ marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+          US cities only (NOAA)
+        </div>
+        <div
+          style={{
+            marginTop: 24,
             color: 'rgba(255,255,255,0.25)',
             fontSize: 13,
             cursor: 'pointer',
@@ -624,6 +894,9 @@ export default function SunClock() {
           onClick={() => setShowAbout(false)}
         >
           tap to close
+        </div>
+        <div style={{ marginTop: 24, color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
+          v{__APP_VERSION__} &copy; {new Date().getFullYear()} Joseph Orr
         </div>
       </div>
     </div>
@@ -638,12 +911,12 @@ export default function SunClock() {
         width: 28,
         height: 28,
         borderRadius: '50%',
-        border: '1px solid rgba(255,255,255,0.15)',
+        border: dayBlend > 0.5 ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.35)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
-        color: 'rgba(255,255,255,0.25)',
+        color: dayBlend > 0.5 ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.45)',
         fontFamily: 'Georgia, serif',
         fontSize: 16,
         fontStyle: 'italic',
@@ -656,20 +929,27 @@ export default function SunClock() {
 
   // --- Mobile layout: stacked vertically ---
   if (isMobile) {
-    const pad = 10;
+    const pad = 4;
     const earthViewSize = (MOON_RING_RADIUS + MOON_ICON_RADIUS + pad) * 2;
     const earthVBx = ex - earthViewSize / 2;
     const earthVBy = ey - earthViewSize / 2;
 
+    // Crop the orbit view to just the content area
+    const orbitPad = 95;
+    const orbitViewSize = (ORBIT_RADIUS + orbitPad) * 2;
+    const orbitVBx = CENTER - ORBIT_RADIUS - orbitPad;
+    const orbitVBy = CENTER - ORBIT_RADIUS - orbitPad;
+
     return (
-      <div style={{ position: 'relative', width: '100%' }}>
+      <div style={{ position: 'relative', width: '100%', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {aboutPage}
+        {weatherModal}
         {headerBlock}
 
         {/* Earth + moons — full width */}
         <svg
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-          style={{ width: '100%', height: 'auto', marginTop: 8, marginBottom: -24 }}
+          style={{ width: '85%', height: 'auto', margin: '0 auto', display: 'block' }}
         >
           {moonRing}
           {earthContent}
@@ -682,17 +962,17 @@ export default function SunClock() {
               width: 28,
               height: 28,
               borderRadius: '50%',
-              border: '1px solid rgba(255,255,255,0.15)',
+              border: dayBlend > 0.5 ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.35)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: 'rgba(255,255,255,0.25)',
+              color: dayBlend > 0.5 ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.45)',
               fontFamily: 'Georgia, serif',
               fontSize: 16,
               fontStyle: 'italic',
               position: 'relative',
-              top: 16,
+              top: 12,
             }}
             onClick={() => setShowAbout(true)}
           >
@@ -700,19 +980,19 @@ export default function SunClock() {
           </div>
         </div>
 
-        {/* Sun view with earth icon on orbit */}
+        {/* Sun view with earth icon on orbit — cropped tight */}
         <svg
-          viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
-          style={{ width: '100%', height: 'auto', marginTop: -16 }}
+          viewBox={`${orbitVBx} ${orbitVBy} ${orbitViewSize} ${orbitViewSize}`}
+          style={{ width: '85%', height: 'auto', margin: '0 auto', display: 'block' }}
         >
           {STARS.map((s, i) => (
             <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(200, 210, 255, ${s.opacity * sky.starOpacity})`} />
           ))}
-          <circle cx={CENTER} cy={CENTER} r={ORBIT_RADIUS} fill="none" stroke="#334" strokeWidth={1.5} />
+          <circle cx={CENTER} cy={CENTER} r={ORBIT_RADIUS} fill="none" stroke={dayBlend > 0.5 ? '#888' : '#556'} strokeWidth={1.5} />
           {seasons.map((s) => (
             <g key={s.label}>
-              <text x={s.x} y={s.y} fill="#667" fontSize={24} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.label}</text>
-              <text x={s.x} y={s.y + s.dy} fill="#445" fontSize={16} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.date}</text>
+              <text x={s.x} y={s.y} fill={dayBlend > 0.5 ? '#999' : '#667'} fontSize={24} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.label}</text>
+              <text x={s.x} y={s.y + s.dy} fill={dayBlend > 0.5 ? '#888' : '#445'} fontSize={16} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.date}</text>
             </g>
           ))}
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
@@ -734,6 +1014,7 @@ export default function SunClock() {
   return (
     <div style={{ position: 'relative', width: '100%', maxWidth: SVG_SIZE }}>
     {aboutPage}
+    {weatherModal}
     {infoButton}
     {headerBlock}
     <svg
@@ -743,11 +1024,11 @@ export default function SunClock() {
       {STARS.map((s, i) => (
         <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(200, 210, 255, ${s.opacity * sky.starOpacity})`} />
       ))}
-      <circle cx={CENTER} cy={CENTER} r={ORBIT_RADIUS} fill="none" stroke="#334" strokeWidth={1.5} />
+      <circle cx={CENTER} cy={CENTER} r={ORBIT_RADIUS} fill="none" stroke={dayBlend > 0.5 ? '#888' : '#556'} strokeWidth={1.5} />
       {seasons.map((s) => (
         <g key={s.label}>
-          <text x={s.x} y={s.y} fill="#667" fontSize={24} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.label}</text>
-          <text x={s.x} y={s.y + s.dy} fill="#445" fontSize={16} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.date}</text>
+          <text x={s.x} y={s.y} fill={dayBlend > 0.5 ? '#999' : '#667'} fontSize={24} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.label}</text>
+          <text x={s.x} y={s.y + s.dy} fill={dayBlend > 0.5 ? '#888' : '#445'} fontSize={16} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.date}</text>
         </g>
       ))}
       <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
