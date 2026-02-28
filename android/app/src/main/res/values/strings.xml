@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sun Clock</string>
+    <string name="title_activity_main">Sun Clock</string>
+    <string name="package_name">com.kaleguy.sunclock</string>
+    <string name="custom_url_scheme">com.kaleguy.sunclock</string>
+</resources>

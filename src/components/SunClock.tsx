@@ -48,6 +48,111 @@ function getSunTimes(dayOfYear: number, latitude: number): { sunrise: number; su
   return { sunrise: 12 - omega / 15, sunset: 12 + omega / 15 };
 }
 
+/**
+ * Approximate moonrise/moonset times and azimuth directions.
+ * Uses the moon's ecliptic longitude to estimate declination,
+ * then computes rise/set like the sun but with a parallax-adjusted altitude.
+ */
+function getMoonTimes(date: Date, latitude: number, longitude: number): {
+  moonrise: number | null;
+  moonset: number | null;
+  moonriseDir: string;
+  moonsetDir: string;
+} {
+  const toRad = Math.PI / 180;
+  const toDeg = 180 / Math.PI;
+
+  // Julian date
+  const jd = date.getTime() / 86400000 + 2440587.5;
+  const T = (jd - 2451545.0) / 36525;
+
+  // Moon's mean elements
+  const L0 = (218.316 + 481267.8813 * T) % 360;
+  const M = (134.963 + 477198.8676 * T) % 360;
+  const F = (93.272 + 483202.0175 * T) % 360;
+
+  // Ecliptic longitude
+  const lambda = L0 + 6.289 * Math.sin(M * toRad);
+  // Ecliptic latitude
+  const beta = 5.128 * Math.sin(F * toRad);
+  // Obliquity
+  const epsilon = 23.439 - 0.00000036 * (jd - 2451545.0);
+
+  // Declination
+  const sinDec = Math.sin(beta * toRad) * Math.cos(epsilon * toRad) +
+    Math.cos(beta * toRad) * Math.sin(epsilon * toRad) * Math.sin(lambda * toRad);
+  const dec = Math.asin(sinDec);
+
+  // Right ascension
+  const y = Math.sin(lambda * toRad) * Math.cos(epsilon * toRad) - Math.tan(beta * toRad) * Math.sin(epsilon * toRad);
+  const x = Math.cos(lambda * toRad);
+  const ra = Math.atan2(y, x);
+
+  const latRad = latitude * toRad;
+
+  // Moon's apparent altitude at rise/set (accounting for parallax and refraction)
+  const h0 = 0.125 * toRad; // ~7.2 arcmin above horizon
+
+  const cosH = (Math.sin(h0) - Math.sin(latRad) * Math.sin(dec)) /
+    (Math.cos(latRad) * Math.cos(dec));
+
+  if (cosH < -1) {
+    // Moon never sets (circumpolar)
+    return { moonrise: 0, moonset: null, moonriseDir: '', moonsetDir: '' };
+  }
+  if (cosH > 1) {
+    // Moon never rises
+    return { moonrise: null, moonset: null, moonriseDir: '', moonsetDir: '' };
+  }
+
+  const H = Math.acos(cosH);
+
+  // Sidereal time at Greenwich midnight
+  const gmst0 = (280.46061837 + 360.98564736629 * (jd - 2451545.0)) % 360;
+
+  // Transit time
+  const transit = ((ra * toDeg - gmst0 - longitude + 720) % 360) / 360 * 24;
+
+  let rise = transit - (H * toDeg / 15);
+  let set = transit + (H * toDeg / 15);
+
+  // Normalize to 0-24
+  rise = ((rise % 24) + 24) % 24;
+  set = ((set % 24) + 24) % 24;
+
+  // Azimuth at rise/set
+  const cosAz = Math.sin(dec) / Math.cos(latRad);
+  const azRise = Math.acos(cosAz) * toDeg;
+  const azSet = 360 - azRise;
+
+  function azToDir(az: number): string {
+    if (az < 22.5 || az >= 337.5) return 'N';
+    if (az < 67.5) return 'NE';
+    if (az < 112.5) return 'E';
+    if (az < 157.5) return 'SE';
+    if (az < 202.5) return 'S';
+    if (az < 247.5) return 'SW';
+    if (az < 292.5) return 'W';
+    return 'NW';
+  }
+
+  return {
+    moonrise: rise,
+    moonset: set,
+    moonriseDir: azToDir(azRise),
+    moonsetDir: azToDir(azSet),
+  };
+}
+
+function formatTime(h: number | null): string {
+  if (h === null) return '--:--';
+  const hrs = Math.floor(h);
+  const mins = Math.floor((h - hrs) * 60);
+  const ampm = hrs >= 12 ? 'pm' : 'am';
+  const h12 = hrs % 12 || 12;
+  return `${h12}:${mins.toString().padStart(2, '0')} ${ampm}`;
+}
+
 function hourToAngle(hour: number): number {
   return ((hour - 6) / 24) * 360;
 }
@@ -236,6 +341,7 @@ export default function SunClock() {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches);
+  const [showAbout, setShowAbout] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
@@ -276,6 +382,7 @@ export default function SunClock() {
   // Sunrise/sunset for YES Watch dial
   const dayOfYear = getDayOfYear(now);
   const { sunrise, sunset } = getSunTimes(dayOfYear, city.latitude);
+  const { moonrise, moonset, moonriseDir, moonsetDir } = getMoonTimes(now, city.latitude, city.longitude);
   const sunriseAngle = hourToAngle(sunrise);
   const sunsetAngle = hourToAngle(sunset);
 
@@ -414,7 +521,7 @@ export default function SunClock() {
   );
 
   const headerBlock = (
-    <div style={{ padding: isMobile ? '40px 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
+    <div style={{ padding: isMobile ? 'calc(12px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
       <div style={{ display: isMobile ? 'inline-block' : undefined, textAlign: 'left' }}>
         <div
           style={{
@@ -441,6 +548,112 @@ export default function SunClock() {
     </div>
   );
 
+  const aboutPage = showAbout && (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0,0,0,0.92)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+      onClick={() => setShowAbout(false)}
+    >
+      <div
+        style={{
+          maxWidth: 400,
+          color: 'rgba(255,255,255,0.7)',
+          fontFamily: 'system-ui, sans-serif',
+          fontWeight: 300,
+          fontSize: 16,
+          lineHeight: 1.6,
+          textAlign: 'center',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 28, fontWeight: 100, color: 'rgba(255,255,255,0.4)', marginBottom: 24 }}>Sun Clock</div>
+        <div style={{
+          marginBottom: 24,
+          fontSize: 14,
+          lineHeight: 1.8,
+          color: 'rgba(255,255,255,0.4)',
+          textAlign: 'left',
+          display: 'inline-block',
+        }}>
+          <div>sunrise {formatTime(sunrise)}</div>
+          <div>sunset {formatTime(sunset)}</div>
+          <div>moonrise {formatTime(moonrise)} {moonriseDir}</div>
+          <div>moonset {formatTime(moonset)} {moonsetDir}</div>
+        </div>
+        <p style={{ marginBottom: 16 }}>
+          A real-time astronomical clock showing the time of day, Earth's position in its yearly orbit around the Sun, and the current moon phase.
+        </p>
+        <p style={{ marginBottom: 32, color: 'rgba(255,255,255,0.4)' }}>
+          Part of a family of apps for staying in touch with present experience.
+        </p>
+        <a
+          href="https://apps.apple.com/us/app/trilog/id6754526159"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-block',
+            padding: '12px 24px',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: 8,
+            color: 'rgba(255,255,255,0.6)',
+            textDecoration: 'none',
+            fontSize: 15,
+            fontWeight: 300,
+          }}
+        >
+          Try TriLog — Mindful Journaling
+        </a>
+        <div
+          style={{
+            marginTop: 32,
+            color: 'rgba(255,255,255,0.25)',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+          onClick={() => setShowAbout(false)}
+        >
+          tap to close
+        </div>
+      </div>
+    </div>
+  );
+
+  const infoButton = (
+    <div
+      style={{
+        position: 'absolute',
+        top: isMobile ? 44 : 28,
+        right: 16,
+        width: 28,
+        height: 28,
+        borderRadius: '50%',
+        border: '1px solid rgba(255,255,255,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        color: 'rgba(255,255,255,0.25)',
+        fontFamily: 'Georgia, serif',
+        fontSize: 16,
+        fontStyle: 'italic',
+      }}
+      onClick={() => setShowAbout(true)}
+    >
+      i
+    </div>
+  );
+
   // --- Mobile layout: stacked vertically ---
   if (isMobile) {
     const pad = 10;
@@ -450,21 +663,47 @@ export default function SunClock() {
 
     return (
       <div style={{ position: 'relative', width: '100%' }}>
+        {aboutPage}
         {headerBlock}
 
         {/* Earth + moons — full width */}
         <svg
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-          style={{ width: '100%', height: 'auto' }}
+          style={{ width: '100%', height: 'auto', marginBottom: -24 }}
         >
           {moonRing}
           {earthContent}
         </svg>
 
+        {/* Info button between clocks */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 20px' }}>
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'rgba(255,255,255,0.25)',
+              fontFamily: 'Georgia, serif',
+              fontSize: 16,
+              fontStyle: 'italic',
+              position: 'relative',
+              top: 16,
+            }}
+            onClick={() => setShowAbout(true)}
+          >
+            i
+          </div>
+        </div>
+
         {/* Sun view with earth icon on orbit */}
         <svg
           viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
-          style={{ width: '100%', height: 'auto' }}
+          style={{ width: '100%', height: 'auto', marginTop: -16 }}
         >
           {STARS.map((s, i) => (
             <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(200, 210, 255, ${s.opacity * sky.starOpacity})`} />
@@ -494,6 +733,8 @@ export default function SunClock() {
   // --- Desktop layout: single SVG ---
   return (
     <div style={{ position: 'relative', width: '100%', maxWidth: SVG_SIZE }}>
+    {aboutPage}
+    {infoButton}
     {headerBlock}
     <svg
       viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
