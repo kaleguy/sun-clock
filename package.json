@@ -1,7 +1,7 @@
 {
   "name": "sun-clock",
   "private": true,
-  "version": "1.0.33",
+  "version": "1.0.38",
   "type": "module",
   "scripts": {
     "dev": "vite",

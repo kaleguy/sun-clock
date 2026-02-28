@@ -424,7 +424,6 @@ export default function SunClock() {
   const [now, setNow] = useState(() => new Date());
   const [cityIndex, setCityIndex] = useState(DEFAULT_CITY_INDEX);
   const [showCityPicker, setShowCityPicker] = useState(false);
-  const pickerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches);
   const [isSmallMobile, setIsSmallMobile] = useState(() => window.innerHeight < 750);
   const [showAbout, setShowAbout] = useState(false);
@@ -456,16 +455,6 @@ export default function SunClock() {
 
   const city = CITIES[cityIndex];
 
-  useEffect(() => {
-    if (!showCityPicker) return;
-    function handleClick(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowCityPicker(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showCityPicker]);
 
   useEffect(() => {
     function tick() {
@@ -646,65 +635,17 @@ export default function SunClock() {
     </>
   );
 
-  const cityPicker = showCityPicker && (
-    <div
-      ref={pickerRef}
-      style={{
-        position: 'absolute',
-        top: 30,
-        left: 16,
-        maxHeight: '50%',
-        overflowY: 'auto',
-        background: 'rgba(10, 14, 26, 0.95)',
-        border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: 8,
-        padding: '4px 0',
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: 16,
-        fontWeight: 300,
-        zIndex: 10,
-      }}
-    >
-      {CITIES.map((c, i) => (
-        <div
-          key={c.name}
-          onClick={() => { setCityIndex(i); setShowCityPicker(false); }}
-          style={{
-            padding: '10px 20px',
-            color: i === cityIndex ? '#4a9eff' : 'rgba(255,255,255,0.5)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-        >
-          {c.name}
-        </div>
-      ))}
-    </div>
-  );
 
   const headerBlock = (
-    <div style={{ padding: isMobile ? 'calc(32px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
+    <div style={{ padding: isMobile ? 'calc(16px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
       <div style={{ display: isMobile ? 'inline-block' : undefined, textAlign: 'left' }}>
-        <div
-          style={{
-            color: dayBlend > 0.5 ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)',
-            fontSize: isMobile ? (isSmallMobile ? 20 : 24) : 20,
-            fontWeight: 100,
-            cursor: 'pointer',
-          }}
-          onClick={() => setShowCityPicker(!showCityPicker)}
-        >
-          {city.name} &#9662;
-        </div>
         <div
           style={{
             color: dayBlend > 0.5 ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.35)',
             fontSize: isMobile ? (isSmallMobile ? 34 : 42) : 36,
             fontWeight: 100,
             lineHeight: 1.1,
-            marginBottom: isMobile ? 14 : 0,
+            marginBottom: isMobile ? 24 : 0,
           }}
         >
           {now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -805,7 +746,43 @@ export default function SunClock() {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ fontSize: 28, fontWeight: 100, color: 'rgba(255,255,255,0.4)', marginBottom: 24 }}>Sun Clock</div>
+        <div style={{ fontSize: 28, fontWeight: 100, color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>Sun Moon Day</div>
+        <div
+          style={{
+            marginBottom: 20,
+            fontSize: 16,
+            color: 'rgba(255,255,255,0.5)',
+            cursor: 'pointer',
+          }}
+          onClick={() => setShowCityPicker(!showCityPicker)}
+        >
+          {city.name} &#9662;
+        </div>
+        {showCityPicker && (
+          <div style={{
+            marginBottom: 16,
+            background: 'rgba(255,255,255,0.06)',
+            borderRadius: 8,
+            padding: '4px 0',
+            maxHeight: 200,
+            overflowY: 'auto',
+          }}>
+            {CITIES.map((c, i) => (
+              <div
+                key={c.name}
+                onClick={() => { setCityIndex(i); setShowCityPicker(false); }}
+                style={{
+                  padding: '8px 20px',
+                  color: i === cityIndex ? '#4a9eff' : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  fontSize: 15,
+                }}
+              >
+                {c.name}
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{
           marginBottom: 24,
           fontSize: 14,
@@ -973,41 +950,16 @@ export default function SunClock() {
         {/* Earth + moons — full width */}
         <svg
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-4px auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-8px auto', display: 'block' }}
         >
           {moonRing}
           {earthContent}
         </svg>
 
-        {/* Info button between clocks */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 20px', margin: '-8px 0' }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              border: dayBlend > 0.5 ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.35)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: dayBlend > 0.5 ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.45)',
-              fontFamily: 'Georgia, serif',
-              fontSize: 16,
-              fontStyle: 'italic',
-              position: 'relative',
-              top: 12,
-            }}
-            onClick={() => setShowAbout(true)}
-          >
-            i
-          </div>
-        </div>
-
         {/* Sun view with earth icon on orbit — cropped tight */}
         <svg
           viewBox={`${orbitVBx} ${orbitVBy} ${orbitViewSize} ${orbitViewSize}`}
-          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-4px auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-8px auto', display: 'block' }}
         >
           {STARS.map((s, i) => (
             <g key={i}>
@@ -1032,7 +984,30 @@ export default function SunClock() {
           <ellipse cx={ex - 6} cy={ey + 6} rx={6} ry={4} fill="#2e7d32" opacity={0.5} />
         </svg>
 
-        {cityPicker}
+        {/* Info button — fixed bottom right */}
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 'calc(20px + env(safe-area-inset-bottom))',
+            right: 20,
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            border: dayBlend > 0.5 ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: dayBlend > 0.5 ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.45)',
+            fontFamily: 'Georgia, serif',
+            fontSize: 16,
+            fontStyle: 'italic',
+            zIndex: 10,
+          }}
+          onClick={() => setShowAbout(true)}
+        >
+          i
+        </div>
       </div>
     );
   }
@@ -1063,7 +1038,6 @@ export default function SunClock() {
       {moonRing}
       {earthContent}
     </svg>
-    {cityPicker}
     </div>
   );
 }
