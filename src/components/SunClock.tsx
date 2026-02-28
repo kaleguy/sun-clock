@@ -422,6 +422,7 @@ export default function SunClock() {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches);
+  const [isSmallMobile, setIsSmallMobile] = useState(() => window.innerHeight < 750);
   const [showAbout, setShowAbout] = useState(false);
   const [dynamicSky, setDynamicSky] = useState(() => localStorage.getItem('sunClock_dynamicSky') === 'true');
   const [showWeather, setShowWeather] = useState(() => localStorage.getItem('sunClock_showWeather') === 'true');
@@ -431,9 +432,16 @@ export default function SunClock() {
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
-    const handler = () => setIsMobile(mq.matches);
+    const handler = () => {
+      setIsMobile(mq.matches);
+      setIsSmallMobile(window.innerHeight < 750);
+    };
     mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    window.addEventListener('resize', handler);
+    return () => {
+      mq.removeEventListener('change', handler);
+      window.removeEventListener('resize', handler);
+    };
   }, []);
 
   const city = CITIES[cityIndex];
@@ -670,7 +678,7 @@ export default function SunClock() {
         <div
           style={{
             color: dayBlend > 0.5 ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)',
-            fontSize: isMobile ? 24 : 20,
+            fontSize: isMobile ? (isSmallMobile ? 20 : 24) : 20,
             fontWeight: 100,
             cursor: 'pointer',
           }}
@@ -681,7 +689,7 @@ export default function SunClock() {
         <div
           style={{
             color: dayBlend > 0.5 ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.35)',
-            fontSize: isMobile ? 42 : 36,
+            fontSize: isMobile ? (isSmallMobile ? 34 : 42) : 36,
             fontWeight: 100,
             lineHeight: 1.1,
             marginBottom: isMobile ? 14 : 0,
@@ -952,7 +960,7 @@ export default function SunClock() {
         {/* Earth + moons — full width */}
         <svg
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-          style={{ width: '85%', height: 'auto', margin: '0 auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '0 auto', display: 'block' }}
         >
           {moonRing}
           {earthContent}
@@ -986,7 +994,7 @@ export default function SunClock() {
         {/* Sun view with earth icon on orbit — cropped tight */}
         <svg
           viewBox={`${orbitVBx} ${orbitVBy} ${orbitViewSize} ${orbitViewSize}`}
-          style={{ width: '85%', height: 'auto', margin: '0 auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '0 auto', display: 'block' }}
         >
           {STARS.map((s, i) => (
             <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(200, 210, 255, ${s.opacity * sky.starOpacity})`} />
