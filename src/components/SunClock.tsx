@@ -809,7 +809,7 @@ export default function SunClock() {
           href="https://apps.apple.com/us/app/trilog/id6754526159"
           onClick={(e) => {
             e.preventDefault();
-            Browser.open({ url: 'https://apps.apple.com/us/app/trilog/id6754526159' });
+            Browser.open({ url: 'itms-apps://itunes.apple.com/app/id6754526159' });
           }}
           style={{
             display: 'inline-block',
