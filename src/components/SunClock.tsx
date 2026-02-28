@@ -637,7 +637,7 @@ export default function SunClock() {
 
 
   const headerBlock = (
-    <div style={{ padding: isMobile ? 'calc(16px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
+    <div style={{ padding: isMobile ? 'calc(8px + env(safe-area-inset-top)) 16px 0' : '24px 16px 0', fontFamily: 'system-ui, sans-serif', textAlign: isMobile ? 'center' : undefined }}>
       <div style={{ display: isMobile ? 'inline-block' : undefined, textAlign: 'left' }}>
         <div
           style={{
@@ -988,8 +988,8 @@ export default function SunClock() {
         <div
           style={{
             position: 'fixed',
-            bottom: 'calc(20px + env(safe-area-inset-bottom))',
-            right: 20,
+            bottom: 'calc(28px + env(safe-area-inset-bottom))',
+            right: 14,
             width: 28,
             height: 28,
             borderRadius: '50%',
