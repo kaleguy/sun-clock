@@ -7,9 +7,8 @@ const CENTER = SVG_SIZE / 2;
 const ORBIT_RADIUS = 210;
 const DAY_CIRCLE_RADIUS = 85;
 const SUN_RADIUS = 34;
-const MOON_RING_RADIUS = 112;
-const MOON_ICON_RADIUS = 8;
-const MOON_COUNT = 30;
+const MOON_ORBIT_RADIUS = 112;
+const MOON_ICON_RADIUS = 14;
 const SYNODIC_PERIOD = 29.53058770576;
 
 // Winter solstice is ~Dec 21 = day 355 of the year
@@ -579,27 +578,63 @@ export default function SunClock() {
   // Shared SVG content pieces
   const dayBlend = 1 - sky.starOpacity;
 
-  const moonRing = Array.from({ length: MOON_COUNT }, (_, i) => {
-    const phaseForDay = (currentMoonPhase + i / SYNODIC_PERIOD) % 1;
-    const angle = -90 - (i / MOON_COUNT) * 360;
-    const pos = polarToCartesian(ex, ey, MOON_RING_RADIUS, angle);
-    const isCurrent = i === 0;
-    const opacity = isCurrent ? 1 : 0.25;
-    const litPath = moonPhasePath(pos.x, pos.y, MOON_ICON_RADIUS, phaseForDay);
-    const strokeColor = isCurrent
-      ? `rgba(${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(0.4, 0.5, dayBlend)})`
-      : `rgba(${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(0.08, 0.3, dayBlend)})`;
-    return (
-      <g key={i} opacity={opacity}>
-        <circle cx={pos.x} cy={pos.y} r={MOON_ICON_RADIUS} fill="#1a1a2e" stroke={strokeColor} strokeWidth={isCurrent ? 0.6 : lerp(0.3, 0.5, dayBlend)} />
-        {litPath === 'full' ? (
-          <circle cx={pos.x} cy={pos.y} r={MOON_ICON_RADIUS} fill={isCurrent ? '#e8e0c8' : '#c8c0a8'} />
-        ) : litPath ? (
-          <path d={litPath} fill={isCurrent ? '#e8e0c8' : '#c8c0a8'} />
-        ) : null}
-      </g>
-    );
-  });
+  // Moon orbital position: phase 0 (new) = top, 0.25 (first quarter) = right,
+  // 0.5 (full) = bottom, 0.75 (last quarter) = left
+  const moonOrbitAngle = -90 + currentMoonPhase * 360;
+  const moonPos = polarToCartesian(ex, ey, MOON_ORBIT_RADIUS, moonOrbitAngle);
+  const litPath = moonPhasePath(moonPos.x, moonPos.y, MOON_ICON_RADIUS, currentMoonPhase);
+  const orbitStroke = `rgba(${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(0.3, 0.4, dayBlend)})`;
+  const labelColor = `rgba(${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(0.3, 0.4, dayBlend)})`;
+  const moonStroke = `rgba(${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(255, 120, dayBlend)},${lerp(0.4, 0.5, dayBlend)})`;
+
+  const moonOrbit = (
+    <g>
+      {/* Dashed orbit circle */}
+      <circle
+        cx={ex} cy={ey} r={MOON_ORBIT_RADIUS}
+        fill="none" stroke={orbitStroke} strokeWidth={1}
+        strokeDasharray="1.5 8"
+      />
+      {/* Phase labels */}
+      <text x={ex} y={ey - MOON_ORBIT_RADIUS - 10} fill={labelColor} fontSize={11} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor="middle">New</text>
+      <text x={ex} y={ey + MOON_ORBIT_RADIUS + 18} fill={labelColor} fontSize={11} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor="middle">Full</text>
+      <text x={ex + MOON_ORBIT_RADIUS - 6} y={ey + 4} fill={labelColor} fontSize={11} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor="start">First</text>
+      <text x={ex + MOON_ORBIT_RADIUS - 6} y={ey + 16} fill={labelColor} fontSize={11} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor="start">Quarter</text>
+      <text x={ex - MOON_ORBIT_RADIUS + 6} y={ey + 4} fill={labelColor} fontSize={11} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor="end">Last</text>
+      <text x={ex - MOON_ORBIT_RADIUS + 6} y={ey + 16} fill={labelColor} fontSize={11} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor="end">Quarter</text>
+      {/* Moon surface texture */}
+      <defs>
+        <radialGradient id="moon-surface" cx="40%" cy="38%">
+          <stop offset="0%" stopColor="#e8e4d4" />
+          <stop offset="60%" stopColor="#c8c0a8" />
+          <stop offset="100%" stopColor="#a89e88" />
+        </radialGradient>
+        <clipPath id="moon-clip">
+          <circle cx={moonPos.x} cy={moonPos.y} r={MOON_ICON_RADIUS} />
+        </clipPath>
+        <clipPath id="moon-lit-clip">
+          {litPath && litPath !== 'full' ? <path d={litPath} /> : <circle cx={moonPos.x} cy={moonPos.y} r={MOON_ICON_RADIUS} />}
+        </clipPath>
+      </defs>
+      {/* Moon at current orbital position */}
+      <circle cx={moonPos.x} cy={moonPos.y} r={MOON_ICON_RADIUS} fill="#1a1a2e" stroke={moonStroke} strokeWidth={0.8} />
+      {/* Lit portion with surface detail */}
+      {(litPath === 'full' || litPath) && (
+        <g clipPath={litPath === 'full' ? 'url(#moon-clip)' : 'url(#moon-lit-clip)'}>
+          <circle cx={moonPos.x} cy={moonPos.y} r={MOON_ICON_RADIUS} fill="url(#moon-surface)" />
+          {/* Craters */}
+          <circle cx={moonPos.x - 4} cy={moonPos.y - 3} r={3.5} fill="#b8b098" opacity={0.5} />
+          <circle cx={moonPos.x + 5} cy={moonPos.y + 2} r={2.5} fill="#b0a890" opacity={0.45} />
+          <circle cx={moonPos.x - 1} cy={moonPos.y + 5} r={2} fill="#b8b098" opacity={0.4} />
+          <circle cx={moonPos.x + 2} cy={moonPos.y - 5} r={1.5} fill="#c0b8a0" opacity={0.35} />
+          <circle cx={moonPos.x - 5} cy={moonPos.y + 2} r={1.8} fill="#a8a088" opacity={0.4} />
+          {/* Maria (dark patches) */}
+          <ellipse cx={moonPos.x - 2} cy={moonPos.y - 1} rx={5} ry={3.5} fill="#9a9480" opacity={0.3} transform={`rotate(-20 ${moonPos.x - 2} ${moonPos.y - 1})`} />
+          <ellipse cx={moonPos.x + 3} cy={moonPos.y + 4} rx={3} ry={2} fill="#9a9480" opacity={0.25} transform={`rotate(15 ${moonPos.x + 3} ${moonPos.y + 4})`} />
+        </g>
+      )}
+    </g>
+  );
 
   const earthContent = (
     <>
@@ -907,8 +942,8 @@ export default function SunClock() {
     <div
       style={{
         position: 'absolute',
-        top: isMobile ? 44 : 28,
-        right: 16,
+        top: isMobile ? 38 : 22,
+        right: 24,
         width: 28,
         height: 28,
         borderRadius: '50%',
@@ -930,8 +965,8 @@ export default function SunClock() {
 
   // --- Mobile layout: stacked vertically ---
   if (isMobile) {
-    const pad = 4;
-    const earthViewSize = (MOON_RING_RADIUS + MOON_ICON_RADIUS + pad) * 2;
+    const pad = 24;
+    const earthViewSize = (MOON_ORBIT_RADIUS + MOON_ICON_RADIUS + pad) * 2;
     const earthVBx = ex - earthViewSize / 2;
     const earthVBy = ey - earthViewSize / 2;
 
@@ -952,7 +987,7 @@ export default function SunClock() {
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
           style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-8px auto', display: 'block' }}
         >
-          {moonRing}
+          {moonOrbit}
           {earthContent}
         </svg>
 
@@ -974,6 +1009,14 @@ export default function SunClock() {
               <text x={s.x} y={s.y + s.dy} fill={dayBlend > 0.5 ? '#888' : '#445'} fontSize={16} fontFamily="system-ui, sans-serif" fontWeight={300} textAnchor={s.anchor}>{s.date}</text>
             </g>
           ))}
+          <defs>
+            <radialGradient id="sun-glow">
+              <stop offset="0%" stopColor="#f5c842" stopOpacity={0.6} />
+              <stop offset="50%" stopColor="#f5c842" stopOpacity={0.15} />
+              <stop offset="100%" stopColor="#f5c842" stopOpacity={0} />
+            </radialGradient>
+          </defs>
+          <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS * 2.5} fill="url(#sun-glow)" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
           {/* Earth icon */}
@@ -989,7 +1032,7 @@ export default function SunClock() {
           style={{
             position: 'fixed',
             bottom: 'calc(28px + env(safe-area-inset-bottom))',
-            right: 14,
+            right: 24,
             width: 28,
             height: 28,
             borderRadius: '50%',
@@ -1035,7 +1078,7 @@ export default function SunClock() {
       ))}
       <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
       <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
-      {moonRing}
+      {moonOrbit}
       {earthContent}
     </svg>
     </div>
