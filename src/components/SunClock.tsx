@@ -763,7 +763,7 @@ export default function SunClock() {
       <circle cx={ex} cy={ey} r={6} fill="#4a9eff" />
       <circle cx={ex} cy={ey} r={3} fill="#0d1528" />
       {/* Tap target for day info */}
-      <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="rgba(0,0,0,0)" cursor="pointer" onPointerUp={() => setShowDayInfo(true)} />
+      <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="black" fillOpacity={0} stroke="none" cursor="pointer" pointerEvents="all" onClick={(e) => { e.stopPropagation(); setShowDayInfo(true); }} />
     </>
   );
 
@@ -1299,7 +1299,7 @@ export default function SunClock() {
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS * 2.5} fill="url(#sun-glow)" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
-          <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="rgba(0,0,0,0)" cursor="pointer" onPointerUp={() => setShowSeasonInfo(true)} />
+          <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="black" fillOpacity={0} stroke="none" cursor="pointer" pointerEvents="all" onClick={(e) => { e.stopPropagation(); setShowSeasonInfo(true); }} />
           {/* Earth icon */}
           <circle cx={ex} cy={ey} r={18} fill="#1a5276" />
           <circle cx={ex} cy={ey} r={18} fill="none" stroke="#4a9eff" strokeWidth={1.5} />
@@ -1361,7 +1361,7 @@ export default function SunClock() {
       ))}
       <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
       <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
-      <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="rgba(0,0,0,0)" cursor="pointer" onPointerUp={() => setShowSeasonInfo(true)} />
+      <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="black" fillOpacity={0} stroke="none" cursor="pointer" pointerEvents="all" onClick={(e) => { e.stopPropagation(); setShowSeasonInfo(true); }} />
       {moonOrbit}
       {earthContent}
     </svg>
