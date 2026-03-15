@@ -762,7 +762,7 @@ export default function SunClock() {
       />
       <circle cx={ex} cy={ey} r={6} fill="#4a9eff" />
       <circle cx={ex} cy={ey} r={3} fill="#0d1528" />
-      {/* Tap target removed — using div overlay instead */}
+      <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="transparent" cursor="pointer" onClick={() => setShowDayInfo(true)} />
     </>
   );
 
@@ -1262,36 +1262,19 @@ export default function SunClock() {
         {headerBlock}
 
         {/* Earth + moons — full width */}
-        <div style={{ position: 'relative', width: isSmallMobile ? '72%' : '85%', margin: '-8px auto' }}>
-          <svg
-            viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-            style={{ width: '100%', height: 'auto', display: 'block' }}
-          >
-            {moonOrbit}
-            {earthContent}
-          </svg>
-          {/* Tap target over Earth clock */}
-          <div
-            onClick={() => setShowDayInfo(true)}
-            style={{
-              position: 'absolute',
-              left: '50%', top: '50%',
-              width: `${(DAY_CIRCLE_RADIUS * 2 / earthViewSize) * 100}%`,
-              height: `${(DAY_CIRCLE_RADIUS * 2 / earthViewSize) * 100}%`,
-              transform: 'translate(-50%, -50%)',
-              borderRadius: '50%',
-              zIndex: 5,
-            }}
-          />
-        </div>
+        <svg
+          viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-8px auto', display: 'block' }}
+        >
+          {moonOrbit}
+          {earthContent}
+        </svg>
 
         {/* Sun view with earth icon on orbit — cropped tight */}
-        <div style={{ position: 'relative', width: isSmallMobile ? '72%' : '85%', margin: '-8px auto' }}>
-          <svg
-            viewBox={`${orbitVBx} ${orbitVBy} ${orbitViewSize} ${orbitViewSize}`}
-            style={{ width: '100%', height: 'auto', display: 'block' }}
-          >
-          {/* Sun tap target as div overlay below */}
+        <svg
+          viewBox={`${orbitVBx} ${orbitVBy} ${orbitViewSize} ${orbitViewSize}`}
+          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-8px auto', display: 'block' }}
+        >
           {STARS.map((s, i) => (
             <g key={i}>
               {s.glow && <circle cx={s.x} cy={s.y} r={s.r * 3} fill={`rgba(180, 200, 255, ${s.opacity * sky.starOpacity * 0.15})`} />}
@@ -1315,28 +1298,14 @@ export default function SunClock() {
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS * 2.5} fill="url(#sun-glow)" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
-          {/* Sun tap target removed — using div overlay instead */}
+          <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="transparent" cursor="pointer" onClick={() => setShowSeasonInfo(true)} />
           {/* Earth icon */}
           <circle cx={ex} cy={ey} r={18} fill="#1a5276" />
           <circle cx={ex} cy={ey} r={18} fill="none" stroke="#4a9eff" strokeWidth={1.5} />
           <ellipse cx={ex} cy={ey} rx={7} ry={16} fill="none" stroke="#2e7d32" strokeWidth={1.5} transform={`rotate(-20 ${ex} ${ey})`} />
           <ellipse cx={ex + 5} cy={ey - 4} rx={8} ry={5} fill="#2e7d32" opacity={0.6} />
           <ellipse cx={ex - 6} cy={ey + 6} rx={6} ry={4} fill="#2e7d32" opacity={0.5} />
-          </svg>
-          {/* Tap target over Sun */}
-          <div
-            onClick={() => setShowSeasonInfo(true)}
-            style={{
-              position: 'absolute',
-              left: '50%', top: '50%',
-              width: `${((SUN_RADIUS + 8) * 2 / orbitViewSize) * 100}%`,
-              height: `${((SUN_RADIUS + 8) * 2 / orbitViewSize) * 100}%`,
-              transform: 'translate(-50%, -50%)',
-              borderRadius: '50%',
-              zIndex: 5,
-            }}
-          />
-        </div>
+        </svg>
 
         {/* Info button — fixed bottom right */}
         <div
@@ -1394,36 +1363,6 @@ export default function SunClock() {
       {moonOrbit}
       {earthContent}
     </svg>
-    {/* Tap target over Earth clock (desktop) */}
-    <div
-      onClick={() => setShowDayInfo(true)}
-      style={{
-        position: 'absolute',
-        left: `${(ex / SVG_SIZE) * 100}%`,
-        top: `${(ey / SVG_SIZE) * 100}%`,
-        width: `${(DAY_CIRCLE_RADIUS * 2 / SVG_SIZE) * 100}%`,
-        height: `${(DAY_CIRCLE_RADIUS * 2 / SVG_SIZE) * 100}%`,
-        transform: 'translate(-50%, -50%)',
-        borderRadius: '50%',
-        cursor: 'pointer',
-        zIndex: 5,
-      }}
-    />
-    {/* Tap target over Sun (desktop) */}
-    <div
-      onClick={() => setShowSeasonInfo(true)}
-      style={{
-        position: 'absolute',
-        left: '50%',
-        top: '50%',
-        width: `${((SUN_RADIUS + 8) * 2 / SVG_SIZE) * 100}%`,
-        height: `${((SUN_RADIUS + 8) * 2 / SVG_SIZE) * 100}%`,
-        transform: 'translate(-50%, -50%)',
-        borderRadius: '50%',
-        cursor: 'pointer',
-        zIndex: 5,
-      }}
-    />
     </div>
   );
 }
