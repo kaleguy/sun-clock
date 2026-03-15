@@ -4,5 +4,9 @@
   min-height: 100dvh;
   display: flex;
   align-items: center;
-  justify-content: center;
+}
+
+.app > * {
+  margin-top: auto;
+  margin-bottom: auto;
 }
