@@ -1254,7 +1254,7 @@ export default function SunClock() {
     const orbitVBy = CENTER - ORBIT_RADIUS - orbitPad;
 
     return (
-      <div style={{ position: 'relative', width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div style={{ position: 'relative', width: '100%', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {aboutPage}
         {weatherModal}
         {dayInfoModal}
@@ -1264,7 +1264,7 @@ export default function SunClock() {
         {/* Earth + moons — full width */}
         <svg
           viewBox={`${earthVBx} ${earthVBy} ${earthViewSize} ${earthViewSize}`}
-          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-8px auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', maxHeight: '42dvh', height: 'auto', margin: '-8px auto', display: 'block' }}
         >
           {moonOrbit}
           {earthContent}
@@ -1273,7 +1273,7 @@ export default function SunClock() {
         {/* Sun view with earth icon on orbit — cropped tight */}
         <svg
           viewBox={`${orbitVBx} ${orbitVBy} ${orbitViewSize} ${orbitViewSize}`}
-          style={{ width: isSmallMobile ? '72%' : '85%', height: 'auto', margin: '-8px auto', display: 'block' }}
+          style={{ width: isSmallMobile ? '72%' : '85%', maxHeight: '42dvh', height: 'auto', margin: '-8px auto', display: 'block' }}
         >
           {STARS.map((s, i) => (
             <g key={i}>
