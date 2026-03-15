@@ -222,6 +222,99 @@ function moonPhasePath(cx: number, cy: number, r: number, phase: number): string
   }
 }
 
+function getMoonPhaseName(phase: number): { name: string; emoji: string } {
+  if (phase < 0.03 || phase >= 0.97) return { name: 'New Moon', emoji: '\u{1F311}' };
+  if (phase < 0.22) return { name: 'Waxing Crescent', emoji: '\u{1F312}' };
+  if (phase < 0.28) return { name: 'First Quarter', emoji: '\u{1F313}' };
+  if (phase < 0.47) return { name: 'Waxing Gibbous', emoji: '\u{1F314}' };
+  if (phase < 0.53) return { name: 'Full Moon', emoji: '\u{1F315}' };
+  if (phase < 0.72) return { name: 'Waning Gibbous', emoji: '\u{1F316}' };
+  if (phase < 0.78) return { name: 'Last Quarter', emoji: '\u{1F317}' };
+  return { name: 'Waning Crescent', emoji: '\u{1F318}' };
+}
+
+function getSeasonName(latitude: number, date: Date): string {
+  const isSouthern = latitude < 0;
+  const month = date.getMonth();
+  const day = date.getDate();
+  if ((month === 2 && day >= 20) || month === 3 || month === 4 || (month === 5 && day < 21)) {
+    return isSouthern ? 'Autumn' : 'Spring';
+  }
+  if ((month === 5 && day >= 21) || month === 6 || month === 7 || (month === 8 && day < 22)) {
+    return isSouthern ? 'Winter' : 'Summer';
+  }
+  if ((month === 8 && day >= 22) || month === 9 || month === 10 || (month === 11 && day < 21)) {
+    return isSouthern ? 'Spring' : 'Autumn';
+  }
+  return isSouthern ? 'Summer' : 'Winter';
+}
+
+function getSeasonEmoji(season: string): string {
+  switch (season) {
+    case 'Spring': return '\u{1F331}';
+    case 'Summer': return '\u{2600}\u{FE0F}';
+    case 'Autumn': return '\u{1F342}';
+    case 'Winter': return '\u{2744}\u{FE0F}';
+    default: return '';
+  }
+}
+
+function getSeasonInfo(latitude: number, date: Date) {
+  const isSouthern = latitude < 0;
+  const currentSeason = getSeasonName(latitude, date);
+  const year = date.getFullYear();
+
+  const seasonOrder = isSouthern
+    ? ['Autumn', 'Winter', 'Spring', 'Summer']
+    : ['Spring', 'Summer', 'Autumn', 'Winter'];
+
+  const seasonDates = isSouthern
+    ? [
+        { name: 'Autumn Equinox', month: 2, day: 20 },
+        { name: 'Winter Solstice', month: 5, day: 21 },
+        { name: 'Spring Equinox', month: 8, day: 22 },
+        { name: 'Summer Solstice', month: 11, day: 21 },
+      ]
+    : [
+        { name: 'Spring Equinox', month: 2, day: 20 },
+        { name: 'Summer Solstice', month: 5, day: 21 },
+        { name: 'Autumn Equinox', month: 8, day: 22 },
+        { name: 'Winter Solstice', month: 11, day: 21 },
+      ];
+
+  const currentIndex = seasonOrder.indexOf(currentSeason);
+  const nextIndex = (currentIndex + 1) % 4;
+  const nextSeason = seasonOrder[nextIndex];
+
+  const nextSD = seasonDates[nextIndex];
+  let nextDate = new Date(year, nextSD.month, nextSD.day);
+  if (nextDate <= date) nextDate = new Date(year + 1, nextSD.month, nextSD.day);
+
+  const currentSD = seasonDates[currentIndex];
+  let currentStart = new Date(year, currentSD.month, currentSD.day);
+  if (currentStart > date) currentStart = new Date(year - 1, currentSD.month, currentSD.day);
+
+  const daysBetween = (a: Date, b: Date) => Math.round(Math.abs(b.getTime() - a.getTime()) / 86400000);
+  const seasonLength = daysBetween(currentStart, nextDate);
+  const daysIntoSeason = daysBetween(currentStart, date);
+  const daysUntilNext = daysBetween(date, nextDate);
+  const seasonProgress = seasonLength > 0 ? Math.min(Math.round((daysIntoSeason / seasonLength) * 100), 100) : 0;
+
+  const dayOfYear = getDayOfYear(date);
+  const daysInYear = getDaysInYear(date);
+  const yearProgress = parseFloat(((dayOfYear / daysInYear) * 100).toFixed(1));
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  return {
+    currentSeason, nextSeason, daysUntilNext,
+    seasonProgress, daysIntoSeason, seasonLength,
+    yearProgress, dayOfYear, daysInYear,
+    hemisphere: isSouthern ? 'Southern' : 'Northern',
+    seasonDates: seasonDates.map(sd => ({ ...sd, formatted: `${monthNames[sd.month]} ${sd.day}` })),
+  };
+}
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -437,6 +530,8 @@ export default function SunClock() {
   const [weatherIcon, setWeatherIcon] = useState<string | null>(null);
   const [weatherForecast, setWeatherForecast] = useState<string | null>(null);
   const [showWeatherModal, setShowWeatherModal] = useState(false);
+  const [showDayInfo, setShowDayInfo] = useState(false);
+  const [showSeasonInfo, setShowSeasonInfo] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
@@ -667,6 +762,8 @@ export default function SunClock() {
       />
       <circle cx={ex} cy={ey} r={6} fill="#4a9eff" />
       <circle cx={ex} cy={ey} r={3} fill="#0d1528" />
+      {/* Tap target for day info */}
+      <circle cx={ex} cy={ey} r={DAY_CIRCLE_RADIUS} fill="rgba(0,0,0,0)" cursor="pointer" onPointerUp={() => setShowDayInfo(true)} />
     </>
   );
 
@@ -748,6 +845,187 @@ export default function SunClock() {
         >
           tap to close
         </div>
+      </div>
+    </div>
+  );
+
+  const moonPhaseInfo = getMoonPhaseName(currentMoonPhase);
+  const dayLength = sunset - sunrise;
+  const dayLengthH = Math.floor(dayLength);
+  const dayLengthM = Math.floor((dayLength - dayLengthH) * 60);
+  const moonIllumination = Math.round(Math.abs(Math.cos(currentMoonPhase * 2 * Math.PI) - 1) / 2 * 100);
+
+  const modalOverlay: React.CSSProperties = {
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    background: 'rgba(0,0,0,0.85)', zIndex: 1000,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+  };
+  const modalBox: React.CSSProperties = {
+    maxWidth: 340, width: '100%',
+    background: '#1a1a2e', borderRadius: 16, padding: 24,
+    fontFamily: 'system-ui, sans-serif', color: 'rgba(255,255,255,0.8)',
+    maxHeight: '80vh', overflowY: 'auto',
+  };
+  const dividerStyle: React.CSSProperties = {
+    height: 1, background: 'rgba(255,255,255,0.1)', margin: '14px 0',
+  };
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0',
+  };
+
+  const dayInfoModal = showDayInfo && (
+    <div style={modalOverlay} onClick={() => setShowDayInfo(false)}>
+      <div style={modalBox} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>
+          {now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </div>
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>{city.name}</div>
+
+        <div style={dividerStyle} />
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Sun</div>
+
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 20, background: 'rgba(244,162,97,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 14, fontSize: 20 }}>
+            &#x2600;
+          </div>
+          <div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Sunrise</div>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{formatTime(sunrise)}</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 20, background: 'rgba(231,111,81,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 14, fontSize: 20 }}>
+            &#x1F305;
+          </div>
+          <div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Sunset</div>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{formatTime(sunset)}</div>
+          </div>
+        </div>
+
+        <div style={rowStyle}>
+          <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>Day length</span>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{dayLengthH}h {dayLengthM}m</span>
+        </div>
+
+        <div style={dividerStyle} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1 }}>Moon</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 20 }}>{moonPhaseInfo.emoji}</span>
+            <span style={{ fontSize: 14, fontWeight: 500 }}>{moonPhaseInfo.name}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 20, background: 'rgba(160,174,192,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 14, fontSize: 18 }}>
+            &#x1F319;
+          </div>
+          <div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Moonrise</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 18, fontWeight: 600 }}>{formatTime(moonrise)}</span>
+              {moonriseDir && <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>{moonriseDir}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 20, background: 'rgba(113,128,150,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 14, fontSize: 18 }}>
+            &#x1F311;
+          </div>
+          <div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Moonset</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 18, fontWeight: 600 }}>{formatTime(moonset)}</span>
+              {moonsetDir && <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>{moonsetDir}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div style={rowStyle}>
+          <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>Illumination</span>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{moonIllumination}%</span>
+        </div>
+
+        <div
+          style={{ marginTop: 16, padding: 14, borderRadius: 8, background: 'rgba(255,255,255,0.08)', textAlign: 'center', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}
+          onClick={() => setShowDayInfo(false)}
+        >Close</div>
+      </div>
+    </div>
+  );
+
+  const seasonInfo = getSeasonInfo(city.latitude, now);
+  const seasonInfoModal = showSeasonInfo && (
+    <div style={modalOverlay} onClick={() => setShowSeasonInfo(false)}>
+      <div style={modalBox} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <span style={{ fontSize: 28 }}>{getSeasonEmoji(seasonInfo.currentSeason)}</span>
+          <span style={{ fontSize: 24, fontWeight: 700 }}>{seasonInfo.currentSeason}</span>
+        </div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>{seasonInfo.hemisphere} Hemisphere</div>
+
+        {/* Season progress */}
+        <div style={{ marginBottom: 4 }}>
+          <div style={{ ...rowStyle, marginBottom: 6 }}>
+            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>Season progress</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{seasonInfo.seasonProgress}%</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 4, background: '#34C759', width: `${seasonInfo.seasonProgress}%` }} />
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
+            Day {seasonInfo.daysIntoSeason} of {seasonInfo.seasonLength}
+          </div>
+        </div>
+
+        <div style={dividerStyle} />
+
+        <div style={rowStyle}>
+          <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>Next season</span>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{getSeasonEmoji(seasonInfo.nextSeason)} {seasonInfo.nextSeason}</span>
+        </div>
+        <div style={rowStyle}>
+          <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>Days until {seasonInfo.nextSeason.toLowerCase()}</span>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{seasonInfo.daysUntilNext}</span>
+        </div>
+
+        <div style={dividerStyle} />
+
+        {/* Year progress */}
+        <div style={{ marginBottom: 4 }}>
+          <div style={{ ...rowStyle, marginBottom: 6 }}>
+            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>Year progress</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{seasonInfo.yearProgress}%</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 4, background: '#007AFF', width: `${seasonInfo.yearProgress}%` }} />
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
+            Day {seasonInfo.dayOfYear} of {seasonInfo.daysInYear}
+          </div>
+        </div>
+
+        <div style={dividerStyle} />
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+          Season Dates {now.getFullYear()}
+        </div>
+        {seasonInfo.seasonDates.map(sd => (
+          <div key={sd.name} style={rowStyle}>
+            <span style={{ fontSize: 14 }}>{sd.name}</span>
+            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>{sd.formatted}</span>
+          </div>
+        ))}
+
+        <div
+          style={{ marginTop: 16, padding: 14, borderRadius: 8, background: 'rgba(255,255,255,0.08)', textAlign: 'center', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}
+          onClick={() => setShowSeasonInfo(false)}
+        >Close</div>
       </div>
     </div>
   );
@@ -980,6 +1258,8 @@ export default function SunClock() {
       <div style={{ position: 'relative', width: '100%', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {aboutPage}
         {weatherModal}
+        {dayInfoModal}
+        {seasonInfoModal}
         {headerBlock}
 
         {/* Earth + moons — full width */}
@@ -1019,6 +1299,7 @@ export default function SunClock() {
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS * 2.5} fill="url(#sun-glow)" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
           <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
+          <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="rgba(0,0,0,0)" cursor="pointer" onPointerUp={() => setShowSeasonInfo(true)} />
           {/* Earth icon */}
           <circle cx={ex} cy={ey} r={18} fill="#1a5276" />
           <circle cx={ex} cy={ey} r={18} fill="none" stroke="#4a9eff" strokeWidth={1.5} />
@@ -1060,6 +1341,8 @@ export default function SunClock() {
     <div style={{ position: 'relative', width: '100%', maxWidth: SVG_SIZE }}>
     {aboutPage}
     {weatherModal}
+    {dayInfoModal}
+    {seasonInfoModal}
     {infoButton}
     {headerBlock}
     <svg
@@ -1078,6 +1361,7 @@ export default function SunClock() {
       ))}
       <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS} fill="#f5c842" />
       <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="none" stroke="#f5c84233" strokeWidth={4} />
+      <circle cx={CENTER} cy={CENTER} r={SUN_RADIUS + 8} fill="rgba(0,0,0,0)" cursor="pointer" onPointerUp={() => setShowSeasonInfo(true)} />
       {moonOrbit}
       {earthContent}
     </svg>
