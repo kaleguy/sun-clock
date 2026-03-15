@@ -1254,7 +1254,7 @@ export default function SunClock() {
     const orbitVBy = CENTER - ORBIT_RADIUS - orbitPad;
 
     return (
-      <div style={{ position: 'relative', width: '100%', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div style={{ position: 'relative', width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {aboutPage}
         {weatherModal}
         {dayInfoModal}
